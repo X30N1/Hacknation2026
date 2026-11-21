@@ -133,24 +133,33 @@ Oryginalny plik dokumentu.
 
 # Asystent LLM
 
+Wiadomości w wątku numerowane są kolejno, łącznie dla obu stron rozmowy:
+`message_id` = 1 (pytanie urzędnika), 2 (odpowiedź LLM), 3 (kolejne pytanie), …
+Pole `msg_owner` mówi, kto napisał wiadomość: `"user"` (urzędnik) albo `"assistant"` (LLM).
+
 ## POST /llm/request
 
-Czego się spodziewa:
- - id rozmowy: int (zwraca nową liczbę w razie gdy podane zostanie -1)
- - Prompt: str (Prośba bazowa użytkownika)
- - Kontekst arr[string] (PRZETWARZANIE OCR NA UŻYTKOWNIKU LOKALNYM)
+Czego się spodziewa (JSON):
+ - thread_id: int (id wątku; -1 = nowy wątek, którego id wraca w odpowiedzi)
+ - prompt: str (prośba bazowa użytkownika)
+ - context: arr[str] (opcjonalnie; teksty dokumentów po OCR – dołączane do pytania dla LLM,
+   zapisywane osobno od promptu)
 
- Co zwraca:
+Co zwraca:
  - thread_id: int (id wątku wiadomości)
- - message_id: int (numer wiadomośći w rozmowie / wątku)
+ - message_id: int (numer kolejny tej wiadomości w wątku – dla odpowiedzi LLM zawsze parzysty)
+ - msg_owner: str (zawsze "assistant")
  - content: str (odpowiedź od LLM)
- - timestamp (GG-MM:DD-MM-RRRR)
+ - timestamp: str (GG-MM:DD-MM-RRRR)
  - sources: ARRAY (fragmenty wcześniejszych rozmów użyte przez RAG, może być puste)
    - thread_id: int
-   - message_id: int
+   - message_id: int (numer wiadomości w wątku źródłowym)
+   - msg_owner: str ("user" | "assistant" – kto napisał fragment)
    - title: str (tytuł wątku źródłowego)
    - snippet: str (fragment tekstu)
    - score: float (trafność)
+
+Błędy: 404 – wątek nie istnieje, 422 – niepoprawne dane, 502 – błąd LLM.
 
 ## GET /llm/all
 
@@ -158,7 +167,7 @@ Co oczekuje:
 nic
 Co zwraca:
 ARRAY
-- id: int (index)
+- id: int (id wątku)
 - title: str (nazwa wątku generowana przez LLM z pierwszego pytania i odpowiedzi)
 - create_date: str (GG-MM:DD-MM-RRRR, data pierwszej wiadomości wątku)
 
@@ -175,11 +184,12 @@ Co zwraca (HTTP 200 gdy OK / tryb echo, HTTP 503 gdy model niedostępny):
 
 ## GET /llm/{thread_id}
 
-czego oczekuje:
-ID wątku
-Co oddaje
-ARR
-- id: (id wiadomości)
-- content: str (odpowiedzi LLM)
-- timestamp: str (GG-MM:DD-MM-RRRR)
+Czego oczekuje:
+ID wątku (404 gdy nie istnieje)
 
+Co oddaje:
+ARRAY – wszystkie wiadomości wątku (obie strony), w kolejności `message_id`
+- message_id: int (numer kolejny wiadomości w wątku: 1, 2, 3, …)
+- msg_owner: str ("user" – urzędnik | "assistant" – LLM)
+- content: str (user: prompt urzędnika bez dołączonego kontekstu OCR; assistant: odpowiedź LLM)
+- timestamp: str (GG-MM:DD-MM-RRRR)

@@ -1,7 +1,8 @@
 """Magazyn danych w SQLite (wątki, wiadomości, sprawy, indeks RAG).
 Schemat tymczasowy – docelowy do opisania w docs/DBDOC.md."""
+import json
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
@@ -15,9 +16,10 @@ CREATE TABLE IF NOT EXISTS threads (
 CREATE TABLE IF NOT EXISTS messages (
     thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
     id        INTEGER NOT NULL,
-    role      TEXT NOT NULL,
-    content   TEXT NOT NULL,
+    role      TEXT NOT NULL,             -- msg_owner: user | assistant
+    content   TEXT NOT NULL,             -- dla user: sam prompt (bez kontekstu OCR)
     timestamp TEXT NOT NULL,
+    context   TEXT NOT NULL DEFAULT '[]', -- JSON: dokumenty po OCR dołączone do pytania
     PRIMARY KEY (thread_id, id)
 );
 CREATE TABLE IF NOT EXISTS sprawy (
@@ -73,10 +75,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS rag_fts USING fts5(
 
 @dataclass
 class StoredMessage:
-    id: int
+    id: int    # numer kolejny w wątku: 1, 2, 3, … (obie strony rozmowy)
     role: str  # "user" | "assistant"
     content: str
     timestamp: datetime
+    context: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -101,6 +104,14 @@ class Store:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Proste migracje istniejących baz (do czasu wprowadzenia Alembica)."""
+        cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(messages)")}
+        if "context" not in cols:
+            self._conn.execute("ALTER TABLE messages ADD COLUMN context TEXT NOT NULL DEFAULT '[]'")
+            self._conn.commit()
 
     def close(self) -> None:
         if self._conn is not None:
@@ -148,11 +159,13 @@ class Store:
             "SELECT * FROM messages WHERE thread_id = ? ORDER BY id", (thread_id,)
         ).fetchall()
         return [
-            StoredMessage(r["id"], r["role"], r["content"], datetime.fromisoformat(r["timestamp"]))
+            StoredMessage(r["id"], r["role"], r["content"], datetime.fromisoformat(r["timestamp"]),
+                          json.loads(r["context"] or "[]"))
             for r in rows
         ]
 
-    def add_message(self, thread_id: int, role: str, content: str) -> StoredMessage:
+    def add_message(self, thread_id: int, role: str, content: str,
+                    context: list[str] | None = None) -> StoredMessage:
         now = datetime.now()
         with self.lock, self.conn:
             (next_id,) = self.conn.execute(
@@ -160,10 +173,12 @@ class Store:
                 (thread_id,),
             ).fetchone()
             self.conn.execute(
-                "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
-                (thread_id, next_id, role, content, now.isoformat()),
+                "INSERT INTO messages (thread_id, id, role, content, timestamp, context)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (thread_id, next_id, role, content, now.isoformat(),
+                 json.dumps(context or [], ensure_ascii=False)),
             )
-        return StoredMessage(next_id, role, content, now)
+        return StoredMessage(next_id, role, content, now, list(context or []))
 
 
 store = Store()

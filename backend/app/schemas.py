@@ -8,6 +8,8 @@ PROMPT_MAX = 20_000         # TODO: limit – znaki w prompt
 CONTEXT_ITEMS_MAX = 50      # TODO: limit – liczba dokumentów w context
 CONTEXT_ITEM_MAX = 200_000  # TODO: limit – znaki w jednym dokumencie po OCR
 
+MsgOwner = Literal["user", "assistant"]  # user = urzędnik, assistant = LLM
+
 
 class LLMRequest(BaseModel):
     thread_id: int = Field(-1, description="ID rozmowy; -1 tworzy nowy wątek")
@@ -34,6 +36,7 @@ class Source(BaseModel):
 
     thread_id: int
     message_id: int
+    msg_owner: MsgOwner
     title: str
     snippet: str
     score: float
@@ -41,7 +44,8 @@ class Source(BaseModel):
 
 class LLMResponse(BaseModel):
     thread_id: int
-    message_id: int
+    message_id: int = Field(..., description="Numer kolejny wiadomości w wątku (1, 2, 3, …)")
+    msg_owner: MsgOwner = "assistant"
     content: str
     timestamp: ApiTimestamp
     sources: list[Source] = Field(
@@ -56,6 +60,7 @@ class ThreadSummary(BaseModel):
 
 
 class Message(BaseModel):
-    id: int
-    content: str
+    message_id: int = Field(..., description="Numer kolejny wiadomości w wątku (1, 2, 3, …)")
+    msg_owner: MsgOwner
+    content: str = Field(..., description="user: prompt urzędnika, assistant: odpowiedź LLM")
     timestamp: ApiTimestamp

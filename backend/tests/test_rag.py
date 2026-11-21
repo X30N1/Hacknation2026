@@ -104,6 +104,7 @@ def test_tool_calling_flow(monkeypatch):
     assert r.status_code == 200, r.text
     assert data["content"] == f"Patrz wątek {old_tid}."
     assert data["sources"] and data["sources"][0]["thread_id"] == old_tid
+    assert data["sources"][0]["msg_owner"] in ("user", "assistant")
     assert "oświetlenie uliczne" in seen_tool_results[0]
 
 

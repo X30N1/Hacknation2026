@@ -44,13 +44,20 @@ def _client(timeout: float | None = None) -> httpx.AsyncClient:
     )
 
 
+def user_content(prompt: str, context: list[str] | None = None) -> str:
+    """Treść wiadomości urzędnika wysyłana do LLM (prompt + dokumenty po OCR)."""
+    if not context:
+        return prompt
+    joined = "\n\n---\n\n".join(context)
+    return f"Kontekst (dokumenty po OCR):\n{joined}\n\nPolecenie:\n{prompt}"
+
+
 def build_messages(history: list[dict], prompt: str, context: list[str]) -> list[dict]:
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}, *history]
-    if context:
-        joined = "\n\n---\n\n".join(context)
-        prompt = f"Kontekst (dokumenty po OCR):\n{joined}\n\nPolecenie:\n{prompt}"
-    messages.append({"role": "user", "content": prompt})
-    return messages
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *history,
+        {"role": "user", "content": user_content(prompt, context)},
+    ]
 
 
 async def chat(messages: list[dict], tools: list[dict] | None = None, **params) -> dict:
