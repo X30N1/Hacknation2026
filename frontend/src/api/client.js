@@ -56,6 +56,9 @@ export const api = {
   sprawy: (filtry) => http('GET', '/sprawy' + qs(filtry)),
   sprawa: (id) => http('GET', `/sprawy/${id}`),
   analizujWniosek: (plik) => http('POST', '/wnioski/analiza', form({ plik })),
+  // Odczyt tekstu BEZ zapisu – oryginał trafia na serwer tylko na czas OCR; do bazy idzie wersja zanonimizowana.
+  odczytajWniosek: (plik) => http('POST', '/wnioski/odczyt', form({ plik })),
+  odczytajDokument: (plik) => http('POST', '/dokumenty/odczyt', form({ plik })),
   utworzSprawe: (dane) => http('POST', '/sprawy', dane),
   edytujSprawe: (id, dane) => http('PATCH', `/sprawy/${id}`, dane),
   dodajZdarzenie: (id, dane) => http('POST', `/sprawy/${id}/zdarzenia`, dane),

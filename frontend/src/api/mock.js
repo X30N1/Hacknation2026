@@ -203,26 +203,35 @@ function blad(status, msg) {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 const clone = (x) => JSON.parse(JSON.stringify(x))
 
-async function analiza(formData) {
+// Odczyt tekstu bez zapisu (POST /dokumenty/odczyt).
+async function odczyt(formData) {
   const plik = formData.get('plik')
   const nazwa = plik?.name || 'plik'
   const ext = nazwa.split('.').pop().toLowerCase()
   if (!['pdf', 'docx', 'txt'].includes(ext)) throw blad(415, 'Nieobsługiwany format. Wgraj plik PDF lub Word (DOCX).')
-  const znak = nazwa.match(/BKS\.IV\.1431\.\d+\.\d{4}/)?.[0]
   const tekst = ext === 'txt'
     ? await plik.text()
-    : `(Tryb demonstracyjny bez backendu.)\nTreść pliku „${nazwa}” zostanie odczytana przez serwer. Tu możesz wpisać lub poprawić tekst wniosku ręcznie.`
-  const doc = {
-    id: nextDocId++, sprawa_id: null, rodzaj: 'WNIOSEK', nazwa_pliku: nazwa, wydzial: null,
-    metoda: ext === 'pdf' ? 'OCR' : ext === 'docx' ? 'DOCX' : 'RECZNA', ocr_pewnosc: ext === 'pdf' ? 0.42 : null,
-    tekst, url_podgladu: '',
-  }
-  dokumenty.push(doc)
-  const maxNr = Math.max(...sprawy.filter((s) => s.rok === ROK).map((s) => s.nr), 0)
+    : `(Tryb demonstracyjny bez backendu.)\nTreść pliku „${nazwa}” zostanie odczytana przez serwer. Tu możesz wpisać lub poprawić tekst ręcznie.`
   return {
-    dokument: doc,
-    propozycja: { znak: znak || `BKS.IV.1431.${maxNr + 1}.${ROK}`, data_wplywu: DZIS, wnioskodawca: '', przedmiot: tekst.split('\n')[0].slice(0, 160) },
+    nazwa_pliku: nazwa,
+    metoda: ext === 'pdf' ? 'OCR' : ext === 'docx' ? 'DOCX' : 'RECZNA',
+    ocr_pewnosc: ext === 'pdf' ? 0.42 : null,
+    tekst,
   }
+}
+
+function propozycjaSprawy(nazwa, tekst) {
+  const znak = nazwa.match(/BKS\.IV\.1431\.\d+\.\d{4}/)?.[0]
+  const maxNr = Math.max(...sprawy.filter((s) => s.rok === ROK).map((s) => s.nr), 0)
+  return { znak: znak || `BKS.IV.1431.${maxNr + 1}.${ROK}`, data_wplywu: DZIS, wnioskodawca: '', przedmiot: tekst.split('\n')[0].slice(0, 160) }
+}
+
+// Zapis dokumentu (POST /wnioski/analiza, POST /sprawy/{id}/dokumenty).
+async function analiza(formData) {
+  const o = await odczyt(formData)
+  const doc = { id: nextDocId++, sprawa_id: null, rodzaj: 'WNIOSEK', wydzial: null, url_podgladu: '', ...o }
+  dokumenty.push(doc)
+  return { dokument: doc, propozycja: propozycjaSprawy(o.nazwa_pliku, o.tekst) }
 }
 
 function utworz(body) {
@@ -275,6 +284,11 @@ export async function handle(method, path, body) {
       return propozycje(doc.tekst)
     }
     if (method === 'POST' && p === '/anonimizacja') return propozycje(body.tekst)
+    if (method === 'POST' && p === '/dokumenty/odczyt') return clone(await odczyt(body))
+    if (method === 'POST' && p === '/wnioski/odczyt') {
+      const o = await odczyt(body)
+      return clone({ odczyt: o, propozycja: propozycjaSprawy(o.nazwa_pliku, o.tekst) })
+    }
     if (method === 'PATCH' && (m = p.match(/^\/dokumenty\/(\d+)$/))) {
       const doc = dokumenty.find((x) => x.id === Number(m[1]))
       doc.tekst = body.tekst

@@ -25,6 +25,12 @@ export const KATEGORIE = {
 
 export const ZASLONA = '█████' // stała długość – długość zamazanego tekstu nie może go zdradzać
 
+// Zanonimizowany tekst jako plik .txt do wysłania istniejącymi endpointami zapisu (oryginał nie jest wysyłany).
+export function jakoPlikTxt(nazwaOryginalu, tekst) {
+  const nazwa = (nazwaOryginalu || 'dokument').replace(/\.[^.]+$/, '') + '.txt'
+  return new File([tekst], nazwa, { type: 'text/plain;charset=utf-8' })
+}
+
 const DUZA = 'A-ZĄĆĘŁŃÓŚŹŻ'
 const MALA = 'a-ząćęłńóśźż'
 

@@ -6,8 +6,10 @@ import { addDays, addMonths, diffDays, formatPL, todayISO } from '../lib/dates'
 import { METODA, ZDARZENIE } from '../lib/labels'
 import OcrBaner from '../components/OcrBaner'
 import AnonimizacjaPodglad from '../components/AnonimizacjaPodglad'
+import { jakoPlikTxt } from '../lib/anonimizacja'
 
 const RODZAJE = ['ODPOWIEDZ', 'WNIOSEK', 'KWERENDA', 'INNE']
+const AKCEPTOWANE = '.pdf,.docx,.txt'
 
 // Akcje dostępne w danym statusie. `pole` = dodatkowe dane w formularzu.
 const AKCJE = [
@@ -15,7 +17,8 @@ const AKCJE = [
   { typ: 'WEZWANIE_DOPRECYZOWANIE', label: 'Wezwanie do doprecyzowania', gdy: ['NOWY', 'W_WYDZIALACH'] },
   { typ: 'DOPRECYZOWANIE_OTRZYMANE', label: 'Otrzymano doprecyzowanie', gdy: ['DOPRECYZOWANIE'] },
   { typ: 'PRZEDLUZENIE', label: 'Przedłuż termin (kwerenda)', pole: 'nowy_termin', gdy: ['NOWY', 'W_WYDZIALACH', 'PRZEDLUZONA'] },
-  { typ: 'PROJEKT', label: 'Odpowiedź przygotowana', gdy: ['W_WYDZIALACH', 'PRZEDLUZONA'] },
+  // plik: klik otwiera wybór pliku odpowiedzi; zapis dokumentu zatwierdza zdarzenie automatycznie
+  { typ: 'PROJEKT', label: 'Odpowiedź przygotowana – wgraj plik', plik: true, gdy: ['W_WYDZIALACH', 'PRZEDLUZONA'] },
   { typ: 'WYSLANO', label: 'Oznacz jako wysłaną', gdy: ['PROJEKT_GOTOWY'] },
   { typ: 'BEZ_ROZPOZNANIA', label: 'Pozostaw bez rozpoznania', gdy: ['DOPRECYZOWANIE'] },
 ]
@@ -67,38 +70,91 @@ function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
   )
 }
 
-function DodajDokument({ onDodaj }) {
-  const [rodzaj, setRodzaj] = useState('ODPOWIEDZ')
-  const [trwa, setTrwa] = useState(false)
-  const input = useRef(null)
+// Nowy dokument w sprawie: odczyt BEZ zapisu → (poprawa tekstu) → anonimizacja → zapis wyłącznie
+// zanonimizowanej treści. `zadanie` = { plik, rodzaj, odpowiedz } – odpowiedź ma stały rodzaj ODPOWIEDZ.
+function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj }) {
+  const [odczyt, setOdczyt] = useState(null)
+  const [tekst, setTekst] = useState('')
+  const [edycja, setEdycja] = useState(false)
+  const [rodzaj, setRodzaj] = useState(zadanie.rodzaj)
+  const [zanonimizowany, setZanonimizowany] = useState(null)
+  const [blad, setBlad] = useState(null)
+  const [zapis, setZapis] = useState(false)
+  const panel = useRef(null)
 
-  async function wybrano(plik) {
-    if (!plik) return
-    setTrwa(true)
+  useEffect(() => {
+    let aktualne = true
+    panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    api.odczytajDokument(zadanie.plik)
+      .then((o) => {
+        if (!aktualne) return
+        setOdczyt(o)
+        setTekst(o.tekst)
+        setEdycja(!o.tekst.trim()) // pusty odczyt (np. pismo odręczne) – od razu do wpisania
+      })
+      .catch((e) => aktualne && setBlad(e.message))
+    return () => { aktualne = false }
+  }, [zadanie])
+
+  async function zapisz() {
+    if (zanonimizowany == null) return
+    setBlad(null)
+    setZapis(true)
     try {
-      await onDodaj(plik, rodzaj)
-    } finally {
-      setTrwa(false)
-      if (input.current) input.current.value = ''
+      await onZapisz(jakoPlikTxt(odczyt.nazwa_pliku, zanonimizowany), rodzaj)
+    } catch (e) {
+      setBlad(e.message)
+      setZapis(false)
     }
   }
 
   return (
-    <div className="actions add-doc">
-      <label className="field">Rodzaj
-        <select value={rodzaj} onChange={(e) => setRodzaj(e.target.value)}>
-          {RODZAJE.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-      </label>
-      <button type="button" className="btn btn-primary" disabled={trwa} onClick={() => input.current?.click()}>
-        {trwa ? 'Odczytuję dokument…' : 'Dodaj dokument'}
-      </button>
-      <input ref={input} type="file" accept=".pdf,.docx,.txt" hidden onChange={(e) => wybrano(e.target.files[0])} />
+    <div className="card" ref={panel}>
+      <div className="doc-head">
+        <h2>{zadanie.odpowiedz ? 'Odpowiedź na wniosek' : 'Nowy dokument'}</h2>
+        <span className="muted">{zadanie.plik.name}</span>
+      </div>
+      {blad && <div className="card error" role="alert">{blad}</div>}
+      {!odczyt && !blad && (
+        <p className="muted"><span className="spinner" aria-hidden="true" /> Odczytuję dokument… (skany mogą potrwać do minuty)</p>
+      )}
+      {odczyt && (
+        <>
+          <OcrBaner dokument={odczyt} />
+          <div className="actions anon-toolbar">
+            {!zadanie.odpowiedz && (
+              <label className="field">Rodzaj
+                <select value={rodzaj} onChange={(e) => setRodzaj(e.target.value)}>
+                  {RODZAJE.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </label>
+            )}
+            {edycja ? (
+              <button type="button" className="btn btn-small" disabled={!tekst.trim()} onClick={() => setEdycja(false)}>
+                Gotowe – przejdź do anonimizacji
+              </button>
+            ) : (
+              <button type="button" className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>
+            )}
+          </div>
+          {edycja ? (
+            <textarea className="doc-text" rows={16} value={tekst} onChange={(e) => setTekst(e.target.value)} aria-label="Treść dokumentu" />
+          ) : (
+            <AnonimizacjaPodglad tekst={tekst} wnioskodawca={wnioskodawca} onZmiana={setZanonimizowany} />
+          )}
+        </>
+      )}
+      <div className="actions">
+        <button type="button" className="btn" disabled={zapis} onClick={onAnuluj}>Anuluj</button>
+        <button type="button" className="btn btn-primary" disabled={zapis || edycja || zanonimizowany == null} onClick={zapisz}>
+          {zapis ? 'Zapisuję…' : zadanie.odpowiedz ? 'Zanonimizuj, zapisz i oznacz odpowiedź jako przygotowaną' : 'Zanonimizuj i zapisz'}
+        </button>
+      </div>
     </div>
   )
 }
 
-function Dokument({ dok, onZapisz, onAnonimizuj }) {
+function Dokument({ dok, onZapisz }) {
   const [edycja, setEdycja] = useState(false)
   const [tekst, setTekst] = useState(dok.tekst)
   return (
@@ -106,7 +162,6 @@ function Dokument({ dok, onZapisz, onAnonimizuj }) {
       <div className="doc-head">
         <strong>{dok.nazwa_pliku}</strong>
         <span className="muted">{dok.rodzaj} · {METODA[dok.metoda] || dok.metoda}{dok.wydzial ? ` · ${dok.wydzial}` : ''}</span>
-        {!edycja && <button className="btn btn-small" onClick={() => onAnonimizuj(dok)}>Anonimizuj</button>}
         {!edycja && <button className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>}
       </div>
       <OcrBaner dokument={dok} />
@@ -130,20 +185,42 @@ export default function Sprawa() {
   const [s, setS] = useState(null)
   const [blad, setBlad] = useState(null)
   const [akcja, setAkcja] = useState(null)
-  const [anon, setAnon] = useState(null) // dokument w trakcie anonimizacji
+  const [nowy, setNowy] = useState(null) // { plik, rodzaj, odpowiedz } – dokument przed zapisem
+  const wyborPliku = useRef(null)
+  const wyborCel = useRef(null) // co otworzyło wybór pliku: { rodzaj, odpowiedz }
+  const zapisanyDok = useRef(false) // odpowiedź: dokument już zapisany, ponawiamy tylko zdarzenie
 
   const wczytaj = useCallback(() => api.sprawa(id).then(setS).catch((e) => setBlad(e.message)), [id])
   useEffect(() => { wczytaj() }, [wczytaj])
 
-  async function dodajDokument(plik, rodzaj) {
+  function wybierzPlik(rodzaj, odpowiedz = false) {
+    wyborCel.current = { rodzaj, odpowiedz }
+    wyborPliku.current?.click()
+  }
+
+  function wybrano(plik) {
+    if (wyborPliku.current) wyborPliku.current.value = ''
+    if (!plik) return
     setBlad(null)
-    try {
-      const dok = await api.dodajDokument(id, plik, rodzaj)
-      await wczytaj()
-      setAnon(dok) // zaraz po dodaniu pokaż podgląd do anonimizacji
-    } catch (e) {
-      setBlad(e.message)
+    setAkcja(null)
+    zapisanyDok.current = false
+    setNowy({ plik, ...wyborCel.current })
+  }
+
+  async function zapiszNowy(plikTxt, rodzaj) {
+    if (!zapisanyDok.current) {
+      await api.dodajDokument(id, plikTxt, rodzaj)
+      zapisanyDok.current = true
     }
+    if (nowy.odpowiedz) {
+      try {
+        await api.dodajZdarzenie(id, { typ: 'PROJEKT', data: todayISO(), inicjaly: s.inicjaly || null })
+      } catch (e) {
+        throw new Error(`Odpowiedź zapisano, ale nie oznaczono jako przygotowanej: ${e.message}`, { cause: e })
+      }
+    }
+    setNowy(null)
+    await wczytaj()
   }
 
   async function zapiszZdarzenie(dane) {
@@ -208,7 +285,8 @@ export default function Sprawa() {
           ) : dostepne.length ? (
             <div className="action-buttons">
               {dostepne.map((a) => (
-                <button key={a.typ} className="btn" onClick={() => setAkcja(a)}>{a.label}</button>
+                <button key={a.typ} className="btn" disabled={a.plik && !!nowy}
+                  onClick={() => (a.plik ? wybierzPlik('ODPOWIEDZ', true) : setAkcja(a))}>{a.label}</button>
               ))}
             </div>
           ) : (
@@ -229,6 +307,12 @@ export default function Sprawa() {
         </div>
       </div>
 
+      <input ref={wyborPliku} type="file" accept={AKCEPTOWANE} hidden onChange={(e) => wybrano(e.target.files[0])} />
+      {nowy && (
+        <NowyDokument key={`${nowy.plik.name}-${nowy.plik.lastModified}-${nowy.odpowiedz}`} zadanie={nowy}
+          wnioskodawca={s.wnioskodawca} onZapisz={zapiszNowy} onAnuluj={() => setNowy(null)} />
+      )}
+
       <div className="grid-2">
         <div className="card">
           <h2>Podobne sprawy z archiwum</h2>
@@ -241,11 +325,12 @@ export default function Sprawa() {
       </div>
 
       <div className="card">
-        <h2>Dokumenty</h2>
-        <DodajDokument onDodaj={dodajDokument} />
-        {anon && <AnonimizacjaPodglad key={anon.id} dokument={anon} onZamknij={() => setAnon(null)} />}
+        <div className="doc-head">
+          <h2>Dokumenty</h2>
+          <button type="button" className="btn btn-primary" disabled={!!nowy} onClick={() => wybierzPlik('INNE')}>Dodaj dokument</button>
+        </div>
         {s.dokumenty?.length ? (
-          s.dokumenty.map((dok) => <Dokument key={dok.id} dok={dok} onZapisz={zapiszTekst} onAnonimizuj={setAnon} />)
+          s.dokumenty.map((dok) => <Dokument key={dok.id} dok={dok} onZapisz={zapiszTekst} />)
         ) : (
           <p className="muted">Brak dokumentów w sprawie.</p>
         )}

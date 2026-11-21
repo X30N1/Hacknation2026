@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { KATEGORIE, ZASLONA, wykryj, zamaz } from '../lib/anonimizacja'
+import { KATEGORIE, wykryj, zamaz } from '../lib/anonimizacja'
 
 // Przesunięcie zaznaczenia (Selection) w całym tekście dokumentu: każdy <span data-s> ma jeden węzeł tekstowy.
 function przesuniecie(wezel, offset) {
@@ -8,26 +8,19 @@ function przesuniecie(wezel, offset) {
   return el ? Number(el.dataset.s) + (wezel.nodeType === 3 ? offset : 0) : null
 }
 
-function pobierz(nazwa, tekst) {
-  const url = URL.createObjectURL(new Blob([tekst], { type: 'text/plain;charset=utf-8' }))
-  const a = Object.assign(document.createElement('a'), { href: url, download: nazwa })
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-// Podgląd dokumentu z wykrytymi danymi zaznaczonymi na szaro. Klik w szary fragment = nie zamazuj,
-// zaznaczenie zwykłego tekstu myszą + „Zamaż zaznaczony tekst” = dodaj ręcznie.
-export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
-  const tekst = dokument.tekst
+// Krok anonimizacji PRZED zapisem dokumentu. Podgląd tekstu z danymi do zamazania na szaro:
+// klik w szary fragment = nie zamazuj, zaznaczenie myszą + „Zamaż zaznaczony tekst” = dodaj ręcznie.
+// Rodzic dostaje przez onZmiana gotowy tekst zanonimizowany (null, dopóki trwa wyszukiwanie)
+// i to on – a nie oryginał – trafia do bazy.
+export default function AnonimizacjaPodglad({ tekst, wnioskodawca, onZmiana }) {
   const [fragmenty, setFragmenty] = useState([])
   const [laduje, setLaduje] = useState(true)
   const [uwagi, setUwagi] = useState([])
-  const [wynik, setWynik] = useState(null)
   const [komunikat, setKomunikat] = useState('')
   const kontener = useRef(null)
   const nextId = useRef(0)
 
-  // Propozycje z backendu (wzorce + wnioskodawca sprawy + model językowy); bez backendu – lokalne wzorce.
+  // Propozycje z backendu (wzorce + wnioskodawca + model językowy); bez backendu – lokalne wzorce.
   useEffect(() => {
     let aktualne = true
     const ustaw = (lista, uw) => {
@@ -37,13 +30,17 @@ export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
       setUwagi(uw)
       setLaduje(false)
     }
-    api.anonimizacjaDokumentu(dokument.id)
+    api.anonimizacjaTekstu(tekst, wnioskodawca || null)
       .then((r) => ustaw(r.fragmenty, r.uwagi || []))
       .catch(() => ustaw(wykryj(tekst), ['Brak połączenia z serwerem – propozycje tylko z prostych wzorców.']))
     return () => { aktualne = false }
-  }, [dokument.id, tekst])
+  }, [tekst, wnioskodawca])
 
   const wybrane = fragmenty.filter((f) => f.wybrany)
+
+  useEffect(() => {
+    onZmiana(laduje ? null : zamaz(tekst, fragmenty.filter((f) => f.wybrany)))
+  }, [fragmenty, laduje, tekst, onZmiana])
 
   const segmenty = useMemo(() => {
     const out = []
@@ -87,42 +84,18 @@ export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
   }
 
   const ustawWszystkie = (wybrany) => setFragmenty((l) => l.map((f) => ({ ...f, wybrany })))
-  const zamazano = () => setWynik(zamaz(tekst, wybrane))
-  const nazwaWyniku = dokument.nazwa_pliku.replace(/\.[^.]+$/, '') + ' (zanonimizowany).txt'
-
-  if (wynik !== null) {
-    return (
-      <div className="anon">
-        <div className="anon-head">
-          <strong>Wersja zanonimizowana · zamazano {wybrane.length}</strong>
-        </div>
-        <pre className="doc-text readonly anon-text">
-          {wynik.split(ZASLONA).map((czesc, i, arr) => (
-            <span key={i}>{czesc}{i < arr.length - 1 && <span className="redacted" aria-label="zamazane">{ZASLONA}</span>}</span>
-          ))}
-        </pre>
-        <p className="hint">Wersja nie jest zapisywana w aplikacji – pobierz ją lub skopiuj przed zamknięciem.</p>
-        <div className="actions">
-          <button type="button" className="btn" onClick={() => setWynik(null)}>Wróć do wyboru</button>
-          <button type="button" className="btn" onClick={() => navigator.clipboard?.writeText(wynik)}>Kopiuj tekst</button>
-          <button type="button" className="btn btn-primary" onClick={() => pobierz(nazwaWyniku, wynik)}>Pobierz .txt</button>
-          <button type="button" className="btn" onClick={onZamknij}>Zamknij</button>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="anon">
       <div className="anon-head">
-        <strong>Anonimizacja: {dokument.nazwa_pliku}</strong>
+        <strong>Anonimizacja przed zapisem</strong>
         <span className="muted">do zamazania: {wybrane.length} z {fragmenty.length}</span>
       </div>
       <p className="hint">
-        Szare fragmenty to dane, które system proponuje zamazać (klik = nie zamazuj). Imion, nazwisk i danych
-        wrażliwych system nie rozpozna w całości – zaznacz je myszą i użyj „Zamaż zaznaczony tekst”.
+        Do systemu trafi tylko ta wersja – szare fragmenty zostaną zamazane (klik = nie zamazuj). Danych, których
+        system nie wykrył, zaznacz myszą i użyj „Zamaż zaznaczony tekst”.
       </p>
-      {laduje && <p className="muted">Wyszukuję dane do zamazania…</p>}
+      {laduje && <p className="muted"><span className="spinner" aria-hidden="true" /> Wyszukuję dane do zamazania…</p>}
       {uwagi.map((u) => <p key={u} className="hint txt-danger">{u}</p>)}
       <div className="actions anon-toolbar">
         <button type="button" className="btn btn-small" onClick={() => ustawWszystkie(true)}>Zaznacz wszystkie</button>
@@ -148,10 +121,6 @@ export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
           <span key={`t${s.start}`} data-s={s.start}>{s.tekst}</span>
         )))}
       </pre>
-      <div className="actions">
-        <button type="button" className="btn" onClick={onZamknij}>Pomiń anonimizację</button>
-        <button type="button" className="btn btn-primary" disabled={laduje} onClick={zamazano}>Zamaż wybrane ({wybrane.length})</button>
-      </div>
     </div>
   )
 }
