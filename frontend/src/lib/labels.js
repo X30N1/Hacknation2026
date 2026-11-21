@@ -1,0 +1,38 @@
+// Statusy wg opisu wyzwania (a–e) + doprecyzowanie i pozostawienie bez rozpoznania.
+export const STATUS = {
+  NOWY: { label: 'Brak działań', kod: 'a' },
+  W_WYDZIALACH: { label: 'Zapytania w wydziałach', kod: 'b' },
+  DOPRECYZOWANIE: { label: 'Wezwanie do doprecyzowania', kod: '' },
+  PRZEDLUZONA: { label: 'Kwerenda (przedłużenie)', kod: 'c' },
+  PROJEKT_GOTOWY: { label: 'Odpowiedź przygotowana', kod: 'd' },
+  WYSLANA: { label: 'Odpowiedź wysłana', kod: 'e' },
+  BEZ_ROZPOZNANIA: { label: 'Bez rozpoznania', kod: '' },
+}
+
+export const PILNOSC = {
+  PRZEKROCZONY: { label: 'Po terminie', opis: 'termin minął' },
+  DZIS: { label: 'Dziś', opis: 'termin upływa dziś' },
+  JUTRO: { label: 'Jutro', opis: 'termin upływa jutro' },
+  WKROTCE: { label: '≤ 3 dni', opis: 'termin w ciągu 3 dni' },
+  BRAK: { label: '', opis: 'w terminie' },
+  ZAMKNIETA: { label: '', opis: 'sprawa zamknięta' },
+}
+
+export const ZDARZENIE = {
+  REJESTRACJA: 'Rejestracja wniosku',
+  PRZEKAZANIE: 'Przekazano do wydziałów',
+  ODP_WYDZIALU: 'Odpowiedź wydziału',
+  WEZWANIE_DOPRECYZOWANIE: 'Wezwanie do doprecyzowania',
+  DOPRECYZOWANIE_OTRZYMANE: 'Otrzymano doprecyzowanie',
+  PRZEDLUZENIE: 'Przedłużenie terminu (kwerenda)',
+  PROJEKT: 'Projekt odpowiedzi gotowy',
+  WYSLANO: 'Odpowiedź wysłana',
+  BEZ_ROZPOZNANIA: 'Pozostawiono bez rozpoznania',
+}
+
+export const METODA = {
+  DOCX: 'Word',
+  PDF_TEXT: 'PDF (warstwa tekstowa)',
+  OCR: 'OCR (skan)',
+  RECZNA: 'wpisany ręcznie',
+}
