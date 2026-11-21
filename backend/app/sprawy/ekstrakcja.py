@@ -4,6 +4,7 @@ import logging
 import shutil
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from app.config import settings
 from app.sprawy.model import Metoda
@@ -78,11 +79,17 @@ def _pdf(dane: bytes) -> Odczyt:
 @lru_cache
 def ocr_dostepny() -> bool:
     """Tesseract + pakiet językowy z config.toml (np. Arch: tesseract-data-pol)."""
-    if not shutil.which("tesseract"):
-        return False
+    exe = shutil.which("tesseract")
+    if not exe:
+        # Windows: instalator UB Mannheim nie dodaje się do PATH
+        domyslny = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+        if not domyslny.is_file():
+            return False
+        exe = str(domyslny)
     try:
         import pytesseract
 
+        pytesseract.pytesseract.tesseract_cmd = exe
         return settings.ocr.jezyk in pytesseract.get_languages(config="")
     except Exception:  # noqa: BLE001
         return False
