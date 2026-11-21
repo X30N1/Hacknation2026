@@ -1,16 +1,14 @@
 """Wypełnienie bazy danymi startowymi.
 
     uv run python -m app.seed            # import kalendarium xlsx z paczki UMB
-    uv run python -m app.seed --demo     # + 10 spraw demo z datami względem dziś
     uv run python -m app.seed --xlsx plik.xlsx
     uv run python -m app.seed --archiwum     # + przykładowe pisma i podstawy prawne (archiwum, baza wiedzy)
 """
 import argparse
-from datetime import date
 from pathlib import Path
 
 from app.config import BACKEND_DIR, settings
-from app.sprawy import demo, import_archiwum, importer
+from app.sprawy import import_archiwum, importer
 from app.storage import store
 
 PACZKA_UMB = BACKEND_DIR.parent / "Hacknation 2026 - UMB"
@@ -23,7 +21,6 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--xlsx", type=Path, default=DOMYSLNY_XLSX, help="kalendarium do importu")
     p.add_argument("--bez-xlsx", action="store_true", help="pomiń import xlsx")
-    p.add_argument("--demo", action="store_true", help="dodaj sprawy demonstracyjne")
     p.add_argument("--archiwum", action="store_true",
                    help="zaimportuj przykładowe pisma i podstawy prawne z paczki UMB (z OCR – może potrwać)")
     a = p.parse_args()
@@ -32,9 +29,6 @@ def main() -> None:
     if not a.bez_xlsx:
         n, s = importer.importuj(a.xlsx)
         print(f"Import xlsx: {n} nowych, {s} już istniało ({a.xlsx.name})")
-    if a.demo:
-        n, s = demo.zaladuj(date.today())
-        print(f"Demo: {n} nowych, {s} już istniało")
     if a.archiwum:
         if PISMA.is_dir():
             n, s = import_archiwum.importuj_pisma(PISMA)

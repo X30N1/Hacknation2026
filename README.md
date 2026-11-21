@@ -15,7 +15,7 @@ i podstawy prawne z paczki UMB. Baza i dokumenty trwają w wolumenie `dane`.
 
 ## Dewelopersko
 ```bash
-cd backend && uv sync && uv run python -m app.seed --demo --archiwum && uv run uvicorn main:app --reload
+cd backend && uv sync && uv run python -m app.seed --archiwum && uv run uvicorn main:app --reload
 cd frontend && npm install && npm run dev   # http://localhost:5173 (proxy /api -> :8000)
 ```
 Windows: Tesseract z instalatora UB Mannheim (z językiem Polish) – backend znajdzie go także poza PATH.

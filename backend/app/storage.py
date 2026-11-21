@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS sprawy (
     znak             TEXT NOT NULL UNIQUE,
     nr               INTEGER NOT NULL,
     rok              INTEGER NOT NULL,
-    zrodlo           TEXT NOT NULL,          -- upload | import | demo
+    zrodlo           TEXT NOT NULL,          -- upload | import
     wnioskodawca     TEXT NOT NULL DEFAULT '',
     przedmiot        TEXT NOT NULL DEFAULT '',
     data_wplywu      TEXT NOT NULL,

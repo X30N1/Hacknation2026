@@ -32,7 +32,7 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - id: int
 - znak: str (`BKS.IV.1431.<nr>.<rok>`)
 - nr: int, rok: int
-- zrodlo: "upload" | "import" | "demo"
+- zrodlo: "upload" | "import"
 - wnioskodawca: str
 - przedmiot: str
 - data_wplywu: str

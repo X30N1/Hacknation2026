@@ -57,7 +57,6 @@ class Metoda(StrEnum):
 class Zrodlo(StrEnum):
     UPLOAD = "upload"
     IMPORT = "import"
-    DEMO = "demo"
 
 
 class Flaga(BaseModel):

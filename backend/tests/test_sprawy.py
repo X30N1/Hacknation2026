@@ -217,17 +217,6 @@ def test_import_xlsx_flagi():
     assert zdarzenie(sid, "PROJEKT").status_code == 409  # import zamknięty
 
 
-def test_demo_seed():
-    from app.sprawy import demo
-
-    assert demo.zaladuj(DZIS) == (10, 0)
-    st = {s["znak"].split(".")[3]: s for s in client.get("/sprawy").json()}
-    assert st["701"]["status"] == "WYSLANA"
-    assert st["702"]["status"] == "PRZEDLUZONA" and st["702"]["pozostalo_dni"] == 10
-    assert st["704"]["pilnosc"] == "DZIS"
-    assert st["708"]["termin_wstrzymany"] is True
-
-
 def test_odczyt_bez_zapisu_i_zapis_zanonimizowanego(tmp_path):
     """Przepływ frontu: odczyt (nic nie trafia do bazy ani na dysk) → anonimizacja → zapis .txt."""
     from app.config import settings
