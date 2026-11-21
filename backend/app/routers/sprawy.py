@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.sprawy import analiza, ekstrakcja, repo, terminy
 from app.sprawy.model import (
-    AnalizaWynik, Dokument, DokumentPopraw, SprawaEdytuj, SprawaLista, SprawaSzczegoly,
+    AnalizaWynik, Dokument, Odczyt, OdczytWniosku, DokumentPopraw, SprawaEdytuj, SprawaLista, SprawaSzczegoly,
     SprawaUtworz, TypZdarzenia, Zrodlo, ZdarzenieDodaj,
 )
 
@@ -134,9 +134,33 @@ async def dodaj_zdarzenie(sid: int, body: ZdarzenieDodaj, d: Dzis):
 
 
 # ---------- dokumenty ----------
-@router.post("/wnioski/analiza", response_model=AnalizaWynik)
+# ---------- odczyt bez zapisu (przed anonimizacją) ----------
+# Oryginał jest przetwarzany tylko w pamięci – nie trafia do bazy ani na dysk. Do systemu
+# zapisuje się wersja zanonimizowana: POST /sprawy/{id}/dokumenty z plikiem .txt.
+def _odczyt(nazwa: str, odczyt: ekstrakcja.Odczyt) -> Odczyt:
+    return Odczyt(nazwa_pliku=nazwa, metoda=odczyt.metoda, ocr_pewnosc=odczyt.ocr_pewnosc,
+                  tekst=odczyt.tekst)
+
+
+@router.post("/dokumenty/odczyt", response_model=Odczyt)
+async def odczytaj_dokument(plik: UploadFile = File(...)):
+    """Tekst dokumentu (TXT / DOCX / PDF / OCR) bez zapisu."""
+    nazwa, _, odczyt = await _wczytaj_plik(plik)
+    return _odczyt(nazwa, odczyt)
+
+
+@router.post("/wnioski/odczyt", response_model=OdczytWniosku)
+async def odczytaj_wniosek(d: Dzis, plik: UploadFile = File(...)):
+    """Tekst wniosku bez zapisu + propozycja danych sprawy (znak, wnioskodawca, przedmiot)."""
+    nazwa, _, odczyt = await _wczytaj_plik(plik)
+    propozycja = await analiza.zaproponuj(nazwa, odczyt.tekst, d)
+    return OdczytWniosku(odczyt=_odczyt(nazwa, odczyt), propozycja=propozycja)
+
+
+@router.post("/wnioski/analiza", response_model=AnalizaWynik, deprecated=True)
 async def analizuj_wniosek(d: Dzis, plik: UploadFile = File(...)):
-    """Odczyt wniosku (DOCX / PDF / OCR) i propozycja danych sprawy.
+    """PRZESTARZAŁE – zapisuje oryginał przed anonimizacją; użyj POST /wnioski/odczyt.
+    Odczyt wniosku (DOCX / PDF / OCR) i propozycja danych sprawy.
     Dokument zapisuje się bez sprawy – przypisuje go POST /sprawy (dokument_id)."""
     nazwa, dane, odczyt = await _wczytaj_plik(plik)
     doc = repo.zapisz_dokument(nazwa, dane, "WNIOSEK", odczyt.metoda, odczyt.tekst,

@@ -67,7 +67,7 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
 - ocr_pewnosc: float | null (0–1, tylko OCR)
 - tekst: str
-- url_podgladu: str (ścieżka względem API, np. `/dokumenty/5/plik`)
+- url_podgladu: str (ścieżka względem API, np. `/dokumenty/5/plik`; zapisany plik to wersja zanonimizowana)
 
 ## GET /sprawy
 Query (opcjonalnie): `rok` (int), `otwarte` (1/true – bez zamkniętych).
@@ -81,7 +81,7 @@ Body JSON:
 - znak: str (wymagany, format jak wyżej; 409 gdy istnieje)
 - data_wplywu: str (wymagana, nie z przyszłości)
 - wnioskodawca: str, przedmiot: str, inicjaly: str | null
-- dokument_id: int | null (dokument z `/wnioski/analiza` – zostaje przypisany do sprawy)
+- dokument_id: int | null (przestarzałe – dokument z `/wnioski/analiza`)
 
 Zwraca 201 + Sprawa (szczegóły).
 
@@ -112,16 +112,45 @@ Dozwolone przejścia (409 w pozostałych przypadkach i dla spraw z importu):
 
 Zwraca 201 + Sprawa (szczegóły). Aplikacja niczego nie wysyła – zdarzenie tylko zapisuje, co zrobił urzędnik.
 
-## POST /wnioski/analiza
+## Zapis dokumentów – tylko po anonimizacji
+Oryginał wniosku lub innego dokumentu nie trafia do bazy ani na dysk. Przepływ:
+1. `POST /wnioski/odczyt` albo `POST /dokumenty/odczyt` – serwer odczytuje tekst w pamięci (OCR)
+   i nic nie zapisuje.
+2. Urzędnik poprawia tekst we frontendzie, a `POST /anonimizacja` proponuje dane do zamazania.
+3. Frontend zamazuje tekst i wysyła wynik jako plik `.txt` przez `POST /sprawy/{id}/dokumenty`.
+   Przy rejestracji wniosku robi to po `POST /sprawy`.
+
+Zapisany dokument ma więc zawsze `metoda = "RECZNA"`, a `GET /dokumenty/{id}/plik` zwraca
+zanonimizowany `.txt`.
+
+### Obiekt Odczyt
+- nazwa_pliku: str
+- metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
+- ocr_pewnosc: float | null (0–1, tylko OCR)
+- tekst: str
+
+## POST /dokumenty/odczyt
 multipart/form-data: `plik` (PDF, DOCX lub TXT; 415 inny format, 413 za duży).
-Odczytuje tekst (DOCX / warstwa tekstowa PDF / OCR skanu) i proponuje dane sprawy.
+Odczytuje tekst (DOCX / warstwa tekstowa PDF / OCR skanu) **bez zapisu**. Zwraca Odczyt.
+
+## POST /wnioski/odczyt
+Działa jak `POST /dokumenty/odczyt` i dodatkowo proponuje dane sprawy. Niczego nie zapisuje.
 Zwraca:
-- dokument: Dokument (sprawa_id = null)
-- propozycja: { znak, data_wplywu, wnioskodawca, przedmiot } (znak z nazwy pliku / treści albo kolejny numer w roku; wnioskodawca i przedmiot z LLM, gdy dostępny)
+- odczyt: Odczyt
+- propozycja: { znak, data_wplywu, wnioskodawca, przedmiot }. `znak` pochodzi z nazwy pliku
+  lub treści, a w ich braku jest to kolejny numer w roku. `wnioskodawca` i `przedmiot`
+  pochodzą z LLM, gdy jest dostępny. Propozycja służy też do anonimizacji: frontend przekazuje
+  `wnioskodawca` do `POST /anonimizacja`.
 
 ## POST /sprawy/{id}/dokumenty
 multipart/form-data: `plik`, `rodzaj` (domyślnie "INNE"), `wydzial` (opcjonalnie).
+Frontend wysyła tu wyłącznie zanonimizowany `.txt`, ale serwer tego nie weryfikuje.
 Zwraca 201 + Dokument.
+
+## POST /wnioski/analiza (przestarzałe)
+**Zapisuje oryginał przed anonimizacją** – nie używać, zastępuje go `POST /wnioski/odczyt`.
+multipart/form-data: `plik`. Zwraca `{ dokument: Dokument (sprawa_id = null), propozycja }`.
+Dokument przypisuje się do sprawy przez `dokument_id` w `POST /sprawy`.
 
 ## PATCH /dokumenty/{id}
 Body JSON: `{ "tekst": str }` – ręczna poprawka tekstu (np. po niepewnym OCR). Zwraca Dokument.
@@ -135,7 +164,8 @@ Oryginalny plik dokumentu.
 
 System podpowiada, które fragmenty urzędnik powinien zamazać przed wysłaniem dokumentu.
 Zwraca tylko **propozycje**: decyzję podejmuje urzędnik, a backend niczego nie zamazuje
-ani nie zapisuje. Zamazanie wykonuje frontend (`AnonimizacjaPodglad.jsx`).
+ani nie zapisuje. Zamazanie wykonuje frontend (`AnonimizacjaPodglad.jsx`) przed zapisem
+dokumentu – patrz „Zapis dokumentów – tylko po anonimizacji”.
 
 Źródła propozycji (`zrodlo`):
 - `WZORZEC` – wyrażenia regularne: PESEL i NIP (z sumą kontrolną), e-mail, telefon,
@@ -173,6 +203,7 @@ ani nie zapisuje. Zamazanie wykonuje frontend (`AnonimizacjaPodglad.jsx`).
   „dokument za długi – model sprawdził pierwsze N znaków”.
 
 ## GET /dokumenty/{id}/anonimizacja
+Nie jest już używany przez frontend, bo dokumenty zapisują się po anonimizacji.
 Propozycje dla zapisanego dokumentu, z wnioskodawcą sprawy, do której dokument należy.
 Query: `llm` (bool, domyślnie `true`), `false` oznacza tylko wzorce.
 Zwraca obiekt Propozycje. Błąd 404 oznacza brak dokumentu.

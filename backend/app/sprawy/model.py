@@ -164,6 +164,19 @@ class Propozycja(BaseModel):
     przedmiot: str
 
 
+class Odczyt(BaseModel):
+    """Tekst odczytany z pliku – nic nie jest zapisywane (POST /dokumenty/odczyt)."""
+    nazwa_pliku: str
+    metoda: Metoda
+    ocr_pewnosc: float | None = None
+    tekst: str
+
+
+class OdczytWniosku(BaseModel):
+    odczyt: Odczyt
+    propozycja: Propozycja
+
+
 class AnalizaWynik(BaseModel):
     dokument: Dokument
     propozycja: Propozycja

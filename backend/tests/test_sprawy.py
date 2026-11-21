@@ -223,3 +223,39 @@ def test_demo_seed():
     assert st["702"]["status"] == "PRZEDLUZONA" and st["702"]["pozostalo_dni"] == 10
     assert st["704"]["pilnosc"] == "DZIS"
     assert st["708"]["termin_wstrzymany"] is True
+
+
+def test_odczyt_bez_zapisu_i_zapis_zanonimizowanego(tmp_path):
+    """Przepływ frontu: odczyt (nic nie trafia do bazy ani na dysk) → anonimizacja → zapis .txt."""
+    from app.config import settings
+    from app.storage import store
+
+    def stan():
+        n = store.conn.execute("SELECT COUNT(*) FROM dokumenty").fetchone()[0]
+        katalog = settings.pliki.resolved()
+        return n, sorted(katalog.iterdir()) if katalog.exists() else []
+
+    przed = stan()
+    plik = docx_bytes("Wniosek o udostępnienie informacji publicznej",
+                      "Proszę o wykaz umów na odśnieżanie.", "Jan Kowalski, PESEL 44051401359")
+    r = client.post("/wnioski/odczyt", files={"plik": ("BKS.IV.1431.301.2026.docx", plik)})
+    assert r.status_code == 200, r.text
+    o = r.json()
+    assert o["odczyt"]["nazwa_pliku"] == "BKS.IV.1431.301.2026.docx"
+    assert o["odczyt"]["metoda"] == "DOCX" and "44051401359" in o["odczyt"]["tekst"]
+    assert o["propozycja"]["znak"] == "BKS.IV.1431.301.2026"
+    assert o["propozycja"]["przedmiot"] == "Proszę o wykaz umów na odśnieżanie."
+
+    r = client.post("/dokumenty/odczyt", files={"plik": ("odp.txt", "Odpowiedź wydziału".encode())})
+    assert r.json() == {"nazwa_pliku": "odp.txt", "metoda": "RECZNA", "ocr_pewnosc": None,
+                        "tekst": "Odpowiedź wydziału"}
+    assert client.post("/dokumenty/odczyt", files={"plik": ("x.exe", b"MZ")}).status_code == 415
+    assert stan() == przed  # odczyt niczego nie zapisał
+
+    # zapis: sprawa + wyłącznie zanonimizowany tekst
+    s = nowa(znak=o["propozycja"]["znak"])
+    tekst = o["odczyt"]["tekst"].replace("Jan Kowalski", "█████").replace("44051401359", "█████")
+    d = client.post(f"/sprawy/{s['id']}/dokumenty", data={"rodzaj": "WNIOSEK"},
+                    files={"plik": ("BKS.IV.1431.301.2026.txt", tekst.encode())}).json()
+    assert d["tekst"] == tekst and "44051401359" not in d["tekst"]
+    assert client.get(f"/sprawy/{s['id']}").json()["dokumenty"][0]["id"] == d["id"]

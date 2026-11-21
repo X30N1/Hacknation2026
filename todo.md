@@ -84,7 +84,9 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 
 ## Anonimizacja
 
-- [ ] Zapisywanie wersji zanonimizowanej jako dokument sprawy (dziś tylko pobranie / kopiowanie we froncie)
+- [ ] Usunąć `POST /wnioski/analiza` i `dokument_id` w `POST /sprawy` (zapisują oryginał) – frontend już ich nie używa (zostały w `client.js` / `mock.js`)
+- [ ] Zachować `metoda` / `ocr_pewnosc` odczytu przy zapisie zanonimizowanego `.txt` (dziś zawsze `RECZNA`)
+- [ ] Weryfikacja po stronie serwera, że zapisywany tekst przeszedł anonimizację (np. ponowne wykrycie PESEL itp. i ostrzeżenie)
 - [ ] Anonimizacja `context` w czacie przed `POST /llm/request` (endpoint `POST /anonimizacja` już jest)
 - [ ] Zamazywanie na oryginalnym PDF / skanie (współrzędne z OCR), nie tylko w tekście
 - [ ] Rozróżnianie urzędników / osób publicznych od prywatnych (słownik pracowników UM)
