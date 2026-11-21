@@ -47,10 +47,8 @@ a { color: var(--primary); }
   padding: 10px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark {
-  background: var(--primary); color: #fff; font-weight: 700; font-size: 0.8rem;
-  padding: 6px 8px; border-radius: 6px; letter-spacing: 0.5px;
-}
+/* logo ma duże białe marginesy – ujemny margines kompensuje je w nagłówku */
+.brand-logo { height: 64px; width: auto; margin: -10px -4px; display: block; }
 .brand-title { font-weight: 700; }
 .brand-sub { font-size: 0.8rem; color: var(--muted); }
 .nav { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }

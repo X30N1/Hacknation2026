@@ -43,7 +43,7 @@ export default function App() {
       )}
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">UDIP</span>
+          <img className="brand-logo" src="/logo.png" alt="Bydgoszcz" />
           <div>
             <div className="brand-title">Asystent urzędnika</div>
             <div className="brand-sub">Urząd Miasta Bydgoszczy · Biuro Komunikacji Społecznej</div>
