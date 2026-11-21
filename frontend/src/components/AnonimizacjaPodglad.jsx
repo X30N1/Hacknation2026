@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '../api/client'
 import { KATEGORIE, ZASLONA, wykryj, zamaz } from '../lib/anonimizacja'
 
 // Przesunięcie zaznaczenia (Selection) w całym tekście dokumentu: każdy <span data-s> ma jeden węzeł tekstowy.
@@ -18,15 +19,29 @@ function pobierz(nazwa, tekst) {
 // zaznaczenie zwykłego tekstu myszą + „Zamaż zaznaczony tekst” = dodaj ręcznie.
 export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
   const tekst = dokument.tekst
-  const poczatkowe = useMemo(
-    () => wykryj(tekst).map((f, i) => ({ ...f, id: i, wybrany: true })),
-    [tekst],
-  )
-  const [fragmenty, setFragmenty] = useState(poczatkowe)
+  const [fragmenty, setFragmenty] = useState([])
+  const [laduje, setLaduje] = useState(true)
+  const [uwagi, setUwagi] = useState([])
   const [wynik, setWynik] = useState(null)
   const [komunikat, setKomunikat] = useState('')
   const kontener = useRef(null)
-  const nextId = useRef(poczatkowe.length)
+  const nextId = useRef(0)
+
+  // Propozycje z backendu (wzorce + wnioskodawca sprawy + model językowy); bez backendu – lokalne wzorce.
+  useEffect(() => {
+    let aktualne = true
+    const ustaw = (lista, uw) => {
+      if (!aktualne) return
+      setFragmenty(lista.map((f, i) => ({ ...f, id: i, wybrany: true })))
+      nextId.current = lista.length
+      setUwagi(uw)
+      setLaduje(false)
+    }
+    api.anonimizacjaDokumentu(dokument.id)
+      .then((r) => ustaw(r.fragmenty, r.uwagi || []))
+      .catch(() => ustaw(wykryj(tekst), ['Brak połączenia z serwerem – propozycje tylko z prostych wzorców.']))
+    return () => { aktualne = false }
+  }, [dokument.id, tekst])
 
   const wybrane = fragmenty.filter((f) => f.wybrany)
 
@@ -107,6 +122,8 @@ export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
         Szare fragmenty to dane, które system proponuje zamazać (klik = nie zamazuj). Imion, nazwisk i danych
         wrażliwych system nie rozpozna w całości – zaznacz je myszą i użyj „Zamaż zaznaczony tekst”.
       </p>
+      {laduje && <p className="muted">Wyszukuję dane do zamazania…</p>}
+      {uwagi.map((u) => <p key={u} className="hint txt-danger">{u}</p>)}
       <div className="actions anon-toolbar">
         <button type="button" className="btn btn-small" onClick={() => ustawWszystkie(true)}>Zaznacz wszystkie</button>
         <button type="button" className="btn btn-small" onClick={() => ustawWszystkie(false)}>Odznacz wszystkie</button>
@@ -123,7 +140,7 @@ export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
             role="button"
             tabIndex={0}
             className={`anon-frag ${s.f.wybrany ? 'on' : 'off'}`}
-            title={`${KATEGORIE[s.f.kategoria] || s.f.kategoria} – kliknij, aby ${s.f.kategoria === 'RECZNIE' ? 'usunąć zaznaczenie' : s.f.wybrany ? 'nie zamazywać' : 'zamazać'}`}
+            title={`${s.f.etykieta || KATEGORIE[s.f.kategoria] || s.f.kategoria}${s.f.powod ? ` (${s.f.powod})` : ''} – kliknij, aby ${s.f.kategoria === 'RECZNIE' ? 'usunąć zaznaczenie' : s.f.wybrany ? 'nie zamazywać' : 'zamazać'}`}
             onClick={() => przelacz(s.f)}
             onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), przelacz(s.f))}
           >{s.tekst}</span>
@@ -133,7 +150,7 @@ export default function AnonimizacjaPodglad({ dokument, onZamknij }) {
       </pre>
       <div className="actions">
         <button type="button" className="btn" onClick={onZamknij}>Pomiń anonimizację</button>
-        <button type="button" className="btn btn-primary" onClick={zamazano}>Zamaż wybrane ({wybrane.length})</button>
+        <button type="button" className="btn btn-primary" disabled={laduje} onClick={zamazano}>Zamaż wybrane ({wybrane.length})</button>
       </div>
     </div>
   )

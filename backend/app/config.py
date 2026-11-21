@@ -69,12 +69,19 @@ class RAGSettings(BaseModel):
     embeddings: EmbeddingsSettings = EmbeddingsSettings()
 
 
+class AnonimizacjaSettings(BaseModel):
+    # LLM uzupełnia wzorce o imiona i nazwiska bez kontekstu oraz dane wrażliwe.
+    # Tekst dokumentu trafia do modelu z [llm] – na produkcji model lokalny.
+    llm: bool = True
+
+
 class Settings(BaseModel):
     llm: LLMSettings = LLMSettings()
     database: DatabaseSettings = DatabaseSettings()
     pliki: PlikiSettings = PlikiSettings()
     ocr: OCRSettings = OCRSettings()
     rag: RAGSettings = RAGSettings()
+    anonimizacja: AnonimizacjaSettings = AnonimizacjaSettings()
 
 
 def load_settings(path: Path = CONFIG_PATH) -> Settings:

@@ -131,6 +131,60 @@ Oryginalny plik dokumentu.
 
 ---
 
+# Anonimizacja
+
+System podpowiada, które fragmenty urzędnik powinien zamazać przed wysłaniem dokumentu.
+Zwraca tylko **propozycje**: decyzję podejmuje urzędnik, a backend niczego nie zamazuje
+ani nie zapisuje. Zamazanie wykonuje frontend (`AnonimizacjaPodglad.jsx`).
+
+Źródła propozycji (`zrodlo`):
+- `WZORZEC` – wyrażenia regularne: PESEL i NIP (z sumą kontrolną), e-mail, telefon,
+  rachunek, dowód, adres, kod pocztowy z miejscowością, data urodzenia, numer rejestracyjny,
+  księga wieczysta, imię i nazwisko po „Pan/Pani/Wnioskodawca”.
+- `SPRAWA` – wnioskodawca zapisany w sprawie, wyszukany w treści, także samo nazwisko
+  w odmianie (Kowalski → Kowalskiego). Osoby prawne (fundacja, sp. z o.o., redakcja…) są pomijane.
+- `LLM` – imiona i nazwiska bez kontekstu, dane wrażliwe, sytuacja rodzinna i majątkowa,
+  tajemnice. Lista danych do anonimizacji jest w `app/prompts.py` (`ANONYMIZED_DATA`).
+  Model dostaje tekst dokumentu, więc na produkcji działa **wyłącznie lokalny model**.
+  Wyłącza się to w `config.toml`: `[anonimizacja] llm = false`. W trybie echo działają tylko
+  wzorce, a w `uwagi` pojawia się ostrzeżenie.
+
+### Obiekt Propozycje
+```json
+{
+  "fragmenty": [
+    { "start": 13, "end": 25, "kategoria": "IMIE_NAZWISKO", "etykieta": "Imię i nazwisko",
+      "tekst": "Jan Kowalski", "zrodlo": "WZORZEC", "powod": null }
+  ],
+  "llm_uzyty": true,
+  "uwagi": []
+}
+```
+- `start` i `end` to zakres znaków w tekście dokumentu (`tekst[start:end] == fragment.tekst`).
+  Fragmenty są posortowane rosnąco i nie nakładają się: przy kolizji wygrywa dłuższy zakres,
+  a przy równych zakresach kolejno WZORZEC, SPRAWA, LLM.
+  Indeksy są w znakach Unicode; dla polskiego tekstu są równe indeksom JS.
+- `kategoria` przyjmuje jedną z wartości: `IMIE_NAZWISKO`, `PESEL`, `NIP`, `DOWOD`,
+  `DATA_URODZENIA`, `ADRES`, `TELEFON`, `EMAIL`, `KONTO`, `POJAZD`, `KSIEGA_WIECZYSTA`,
+  `DANE_WRAZLIWE`, `SYTUACJA_OSOBISTA`, `TAJEMNICA`, `INNE`. `etykieta` to jej polska nazwa.
+- `powod` – krótkie uzasadnienie (od LLM albo „wnioskodawca w sprawie”).
+- `llm_uzyty` – czy model sprawdzał tekst.
+- `uwagi` – ostrzeżenia dla urzędnika, np. „model niedostępny – tylko wzorce” albo
+  „dokument za długi – model sprawdził pierwsze N znaków”.
+
+## GET /dokumenty/{id}/anonimizacja
+Propozycje dla zapisanego dokumentu, z wnioskodawcą sprawy, do której dokument należy.
+Query: `llm` (bool, domyślnie `true`), `false` oznacza tylko wzorce.
+Zwraca obiekt Propozycje. Błąd 404 oznacza brak dokumentu.
+
+## POST /anonimizacja
+Propozycje dla dowolnego tekstu, np. kontekstu OCR przed wysłaniem do asystenta albo
+projektu pisma.
+Body JSON: `{ "tekst": str, "wnioskodawca": str | null, "llm": bool = true }`.
+Zwraca obiekt Propozycje. Błąd 422 oznacza błędne body.
+
+---
+
 # Asystent LLM
 
 Wiadomości w wątku numerowane są kolejno, łącznie dla obu stron rozmowy:

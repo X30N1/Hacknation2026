@@ -29,6 +29,8 @@ Wartości w kodzie są tymczasowe – do ustalenia z zespołem / urzędem.
 | RAG – długość `snippet` w `sources` | 300 znaków | `backend/app/rag.py` (`SNIPPET_LEN`) | |
 | Timeout LLM | 120 s | `config.toml` `[llm]` | |
 | Timeout embeddingów | 30 s | `config.toml` `[rag.embeddings]` | |
+| Anonimizacja – znaki tekstu w jednym zapytaniu do LLM | 6000 | `backend/app/anonimizacja.py` (`LLM_FRAGMENT_MAX`) | |
+| Anonimizacja – maks. zapytań do LLM na dokument | 10 | `backend/app/anonimizacja.py` (`LLM_FRAGMENTY_MAX`) | dalej tylko wzorce |
 | Rate limiting na użytkownika | – | – | do ustalenia razem z autoryzacją |
 
 ## Serwer plików z OCR jako źródło dla RAG (w stylu Google Drive)
@@ -80,13 +82,21 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 - [ ] Przypomnienia o zbliżających się terminach (w aplikacji – bez wysyłki na zewnątrz)
 - [ ] Generowanie projektu odpowiedzi z dokumentów sprawy (LLM) jako dokument `PROJEKT`
 
+## Anonimizacja
+
+- [ ] Zapisywanie wersji zanonimizowanej jako dokument sprawy (dziś tylko pobranie / kopiowanie we froncie)
+- [ ] Anonimizacja `context` w czacie przed `POST /llm/request` (endpoint `POST /anonimizacja` już jest)
+- [ ] Zamazywanie na oryginalnym PDF / skanie (współrzędne z OCR), nie tylko w tekście
+- [ ] Rozróżnianie urzędników / osób publicznych od prywatnych (słownik pracowników UM)
+- [ ] Lokalny model NER (np. spaCy `pl_core_news`) jako uzupełnienie wzorców bez LLM
+- [ ] Ewaluacja wykrywania na przykładowych wnioskach (precyzja / czułość)
+
 ## API
 
 - [ ] `DELETE /llm/{thread_id}`, zmiana tytułu wątku
 - [ ] Powiązanie wątku czatu ze sprawą
 - [ ] Paginacja `GET /llm/all`, `GET /llm/{thread_id}`, `GET /sprawy`
 - [ ] Streaming odpowiedzi LLM (SSE)
-- [ ] Osobny endpoint anonimizacji dokumentu
 - [ ] Status RAG / embeddingów w `GET /llm/health`
 - [ ] Ujednolicone formaty błędów
 

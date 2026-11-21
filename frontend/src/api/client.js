@@ -62,4 +62,6 @@ export const api = {
   dodajDokument: (id, plik, rodzaj, wydzial) =>
     http('POST', `/sprawy/${id}/dokumenty`, form({ plik, rodzaj, wydzial })),
   poprawTekst: (dokumentId, tekst) => http('PATCH', `/dokumenty/${dokumentId}`, { tekst }),
+  anonimizacjaDokumentu: (dokumentId) => http('GET', `/dokumenty/${dokumentId}/anonimizacja`),
+  anonimizacjaTekstu: (tekst, wnioskodawca) => http('POST', '/anonimizacja', { tekst, wnioskodawca }),
 }

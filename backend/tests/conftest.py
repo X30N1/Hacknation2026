@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import LLMSettings, PlikiSettings, RAGSettings, settings
+from app.config import AnonimizacjaSettings, LLMSettings, PlikiSettings, RAGSettings, settings
 from app.storage import store
 
 
@@ -10,6 +10,7 @@ def isolated(monkeypatch, tmp_path):
     Niezależne od lokalnego config.toml."""
     monkeypatch.setattr(settings, "llm", LLMSettings())
     monkeypatch.setattr(settings, "rag", RAGSettings())
+    monkeypatch.setattr(settings, "anonimizacja", AnonimizacjaSettings())
     monkeypatch.setattr(settings, "pliki", PlikiSettings(katalog=str(tmp_path / "pliki")))
     store.connect(tmp_path / "test.db")
     yield

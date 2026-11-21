@@ -94,7 +94,6 @@ class Store:
         self.lock = RLock()
         self._conn: sqlite3.Connection | None = None
 
-    # --- połączenie ---
     def connect(self, path: Path | str) -> None:
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -153,7 +152,6 @@ class Store:
         rows = self.conn.execute(f"SELECT id, title FROM threads WHERE id IN ({q})", tuple(ids))
         return {r["id"]: r["title"] for r in rows}
 
-    # --- wiadomości ---
     def get_messages(self, thread_id: int) -> list[StoredMessage]:
         rows = self.conn.execute(
             "SELECT * FROM messages WHERE thread_id = ? ORDER BY id", (thread_id,)
