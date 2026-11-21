@@ -21,7 +21,7 @@ def is_echo_mode() -> bool:
 def is_local() -> bool:
     """Czy LLM działa lokalnie / w sieci urzędu (dane nie wychodzą na zewnątrz)."""
     host = urlparse(settings.llm.base_url).hostname or ""
-    if host == "localhost" or host.endswith((".local", ".internal")):
+    if host == "localhost":
         return True
     try:
         ip = ipaddress.ip_address(host)
@@ -31,8 +31,6 @@ def is_local() -> bool:
 
 
 def backend_name() -> str:
-    if "deepseek" in settings.llm.base_url:
-        return "deepseek"
     return "lokalny" if is_local() else "zewnętrzny"
 
 
@@ -83,7 +81,7 @@ def _fallback_title(prompt: str) -> str:
 
 
 async def generate_title(prompt: str, answer: str) -> str:
-    """Tytuł wątku na bazie pierwszego pytania i odpowiedzi (jak w Claude.ai).
+    """Tytuł wątku na bazie pierwszego pytania i odpowiedzi.
     Przy błędzie LLM – obcięty prompt, żeby nie blokować rozmowy."""
     if is_echo_mode():
         return _fallback_title(prompt)

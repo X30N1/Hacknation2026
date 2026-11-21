@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException
 
 from app import llm_client
 from app.config import settings
-from app.routers import llm, sprawy
+from app.routers import anonimizacja, llm, sprawy
 from app.storage import store
 
 
@@ -28,6 +28,7 @@ app = FastAPI(
 
 app.include_router(llm.router)
 app.include_router(sprawy.router)
+app.include_router(anonimizacja.router)
 
 
 # Błędy w formacie frontendu: {"blad": "komunikat"} (+ "detail" dla zgodności z FastAPI).

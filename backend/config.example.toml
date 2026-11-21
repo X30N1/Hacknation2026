@@ -44,3 +44,9 @@ base_url = ""
 api_key = ""
 model = "nomic-embed-text"
 timeout = 30
+
+[anonimizacja]
+# Propozycje danych do zamazania: wzorce (PESEL, NIP, e-mail…) zawsze, a przy llm = true
+# także model z [llm] (imiona i nazwiska, dane wrażliwe). Tekst dokumentu trafia do modelu –
+# na produkcji tylko model lokalny.
+llm = true

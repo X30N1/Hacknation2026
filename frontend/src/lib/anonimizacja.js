@@ -1,5 +1,6 @@
 // Wykrywanie danych do zamazania (lista „Dane podlegające anonimizacji”) – tylko PROPOZYCJE,
-// o zamazaniu decyduje urzędnik. Wzorce działają lokalnie w przeglądarce.
+// o zamazaniu decyduje urzędnik. Główne źródło: backend (GET /dokumenty/{id}/anonimizacja – wzorce,
+// wnioskodawca ze sprawy, model językowy); te wzorce to zapas przy braku backendu i dla mocka.
 // Nie wykryje imion i nazwisk bez kontekstu ani danych wrażliwych (zdrowie itp.) – te urzędnik zaznacza ręcznie.
 
 export const KATEGORIE = {
@@ -14,6 +15,11 @@ export const KATEGORIE = {
   KONTO: 'Rachunek bankowy',
   POJAZD: 'Numer rejestracyjny pojazdu',
   KSIEGA_WIECZYSTA: 'Księga wieczysta',
+  // tylko z backendu (model językowy)
+  DANE_WRAZLIWE: 'Dane wrażliwe (zdrowie, poglądy, karalność…)',
+  SYTUACJA_OSOBISTA: 'Sytuacja rodzinna / majątkowa',
+  TAJEMNICA: 'Tajemnica ustawowo chroniona',
+  INNE: 'Inne dane osobowe',
   RECZNIE: 'Zaznaczone ręcznie',
 }
 

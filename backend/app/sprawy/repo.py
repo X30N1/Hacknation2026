@@ -79,6 +79,11 @@ def zrodlo(sid: int) -> Zrodlo | None:
     return Zrodlo(w["zrodlo"]) if w else None
 
 
+def wnioskodawca(sid: int) -> str | None:
+    w = _wiersz(sid)
+    return w["wnioskodawca"] if w else None
+
+
 # ---------- zdarzenia ----------
 def _insert_zdarzenie(sid, typ, data, nowy_termin, payload, inicjaly) -> int:
     cur = store.conn.execute(

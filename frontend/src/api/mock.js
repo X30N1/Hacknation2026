@@ -2,6 +2,7 @@
 // źródłem prawdy jest backend (cases/rules). Stan w pamięci; odświeżenie strony go resetuje.
 import { addDays, addMonths, diffDays, isWeekend, todayISO } from '../lib/dates'
 import { ApiError } from './errors'
+import { KATEGORIE, wykryj } from '../lib/anonimizacja'
 
 const DZIS = todayISO()
 const ROK = Number(DZIS.slice(0, 4))
@@ -70,6 +71,13 @@ let nextEvId = 1
 let nextDocId = 1
 const sprawy = []
 const dokumenty = []
+
+// Odpowiedź jak z backendu (POST /anonimizacja), ale tylko z lokalnych wzorców.
+const propozycje = (tekst) => ({
+  fragmenty: wykryj(tekst).map((f) => ({ ...f, etykieta: KATEGORIE[f.kategoria], zrodlo: 'WZORZEC', powod: null })),
+  llm_uzyty: false,
+  uwagi: ['Mock: propozycje tylko z wzorców.'],
+})
 
 function ev(typ, data, payload = {}, nowy_termin = null, inicjaly = null) {
   return { id: nextEvId++, typ, data, nowy_termin, payload, inicjaly }
@@ -261,6 +269,12 @@ export async function handle(method, path, body) {
       Object.assign(dokument, { sprawa_id: s.id, rodzaj: body.get('rodzaj') || 'INNE' })
       return clone(dokument)
     }
+    if (method === 'GET' && (m = p.match(/^\/dokumenty\/(\d+)\/anonimizacja$/))) {
+      const doc = dokumenty.find((x) => x.id === Number(m[1]))
+      if (!doc) throw blad(404, 'Nie znaleziono dokumentu.')
+      return propozycje(doc.tekst)
+    }
+    if (method === 'POST' && p === '/anonimizacja') return propozycje(body.tekst)
     if (method === 'PATCH' && (m = p.match(/^\/dokumenty\/(\d+)$/))) {
       const doc = dokumenty.find((x) => x.id === Number(m[1]))
       doc.tekst = body.tekst
