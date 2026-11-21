@@ -1,0 +1,52 @@
+# Skopiuj do config.toml (plik jest w .gitignore) i uzupełnij.
+# Brak config.toml lub pusty api_key dla DeepSeeka = tryb echo (do testów).
+
+[llm]
+# DeepSeek (API zgodne z OpenAI) lub lokalny serwer, np. Ollama: "http://localhost:11434/v1"
+base_url = "https://api.deepseek.com"
+api_key = ""
+model = "deepseek-chat"
+# limit czasu zapytania do LLM w sekundach
+timeout = 120
+
+[database]
+# SQLite; ścieżka względna liczona od katalogu backend/
+path = "data/app.db"
+
+[pliki]
+# wgrane dokumenty; ścieżka względna liczona od katalogu backend/
+katalog = "data/pliki"
+max_mb = 20
+
+[ocr]
+# Tesseract + pakiet językowy (Arch: tesseract-data-pol, Debian/Ubuntu: tesseract-ocr-pol).
+# Bez pakietu skany PDF wracają z pustym tekstem do wpisania ręcznie.
+jezyk = "pol"
+dpi = 300
+max_stron = 20
+# PDF z mniejszą liczbą znaków w warstwie tekstowej jest traktowany jak skan
+min_znakow_warstwy = 50
+
+[rag]
+# "tool" - model sam przeszukuje wcześniejsze rozmowy (function calling)
+# "auto" - wyniki wyszukiwania doklejane do każdego zapytania (modele bez function calling)
+# "off"  - wyłączone
+mode = "tool"
+top_k = 5
+chunk_size = 1200
+chunk_overlap = 200
+max_tool_rounds = 3
+
+[rag.embeddings]
+# Puste base_url = tylko wyszukiwanie pełnotekstowe (bez wektorów).
+# DeepSeek nie udostępnia embeddingów - np. Ollama: "http://localhost:11434/v1"
+base_url = ""
+api_key = ""
+model = "nomic-embed-text"
+timeout = 30
+
+[anonimizacja]
+# Propozycje danych do zamazania: wzorce (PESEL, NIP, e-mail…) zawsze, a przy llm = true
+# także model z [llm] (imiona i nazwiska, dane wrażliwe). Tekst dokumentu trafia do modelu –
+# na produkcji tylko model lokalny.
+llm = true

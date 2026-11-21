@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+backend/.venv
+backend/data
+# klucze API – konfiguracja montowana w docker-compose.yml, nigdy w obrazie
+backend/config.toml

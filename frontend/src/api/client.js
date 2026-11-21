@@ -1,9 +1,7 @@
-// Klient API zgodny z docs/API.md. Przy VITE_API_MOCK=1 zapytania obsługuje src/api/mock.js.
+// Klient API zgodny z backend/docs/APIDOC.md (w dev: proxy Vite /api → localhost:8000).
 import { ApiError } from './errors'
-import { handle as mockHandle } from './mock'
 
 export { ApiError }
-export const USE_MOCK = import.meta.env.VITE_API_MOCK === '1'
 
 function qs(params = {}) {
   const p = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
@@ -11,8 +9,6 @@ function qs(params = {}) {
 }
 
 async function http(method, path, body) {
-  if (USE_MOCK) return mockHandle(method, path, body)
-
   const opts = { method, headers: {} }
   if (body instanceof FormData) opts.body = body
   else if (body !== undefined) {
@@ -30,7 +26,11 @@ async function http(method, path, body) {
     let msg = `Błąd serwera (${res.status})`
     try {
       const j = await res.json()
-      msg = j.blad || msg
+      // FastAPI: {"detail": "tekst"} albo przy walidacji (422) {"detail": [{"loc": [...], "msg": "..."}]}
+      const detail = Array.isArray(j.detail)
+        ? j.detail.map((d) => `${(d.loc || []).slice(1).join('.')}: ${d.msg}`).join('; ')
+        : j.detail
+      msg = j.blad || detail || msg
     } catch {
       /* odpowiedź bez JSON */
     }
@@ -51,11 +51,26 @@ export const api = {
 
   sprawy: (filtry) => http('GET', '/sprawy' + qs(filtry)),
   sprawa: (id) => http('GET', `/sprawy/${id}`),
-  analizujWniosek: (plik) => http('POST', '/wnioski/analiza', form({ plik })),
+  // Odczyt tekstu BEZ zapisu – oryginał trafia na serwer tylko na czas OCR; do bazy idzie wersja zanonimizowana.
+  odczytajWniosek: (plik) => http('POST', '/wnioski/odczyt', form({ plik })),
+  odczytajDokument: (plik) => http('POST', '/dokumenty/odczyt', form({ plik })),
   utworzSprawe: (dane) => http('POST', '/sprawy', dane),
   edytujSprawe: (id, dane) => http('PATCH', `/sprawy/${id}`, dane),
   dodajZdarzenie: (id, dane) => http('POST', `/sprawy/${id}/zdarzenia`, dane),
   dodajDokument: (id, plik, rodzaj, wydzial) =>
     http('POST', `/sprawy/${id}/dokumenty`, form({ plik, rodzaj, wydzial })),
   poprawTekst: (dokumentId, tekst) => http('PATCH', `/dokumenty/${dokumentId}`, { tekst }),
+  anonimizacjaTekstu: (tekst, wnioskodawca) => http('POST', '/anonimizacja', { tekst, wnioskodawca }),
+  pobierzDocx: (dokumentId) => http('GET', `/dokumenty/${dokumentId}/docx`),
+
+  // archiwum, ścieżka (wydziały), projekt odpowiedzi
+  podobneSprawy: (id) => http('GET', `/sprawy/${id}/podobne`),
+  sugestieWydzialow: (id) => http('GET', `/sprawy/${id}/wydzialy`),
+  projektOdpowiedzi: (id) => http('POST', `/sprawy/${id}/projekt`),
+  szukajWArchiwum: (q) => http('GET', '/archiwum/szukaj' + qs({ q })),
+
+  // baza wiedzy: ustawy, zarządzenia, wzory pism, archiwalne pisma
+  wiedza: () => http('GET', '/wiedza'),
+  dodajWiedze: (plik, rodzaj) => http('POST', '/wiedza', form({ plik, rodzaj })),
+  usunWiedze: (id) => http('DELETE', `/wiedza/${id}`),
 }

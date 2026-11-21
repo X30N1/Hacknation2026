@@ -1,0 +1,29 @@
+# Uruchomienie w urzędzie:  docker compose up --build   ->  http://localhost:8000
+#
+# Bez modelu językowego aplikacja działa w pełni lokalnie: OCR, kalendarz, archiwum (wyszukiwanie
+# pełnotekstowe), wydziały ze słów kluczowych i archiwum, projekt pisma z szablonu, anonimizacja wzorcami.
+#
+# Z lokalnym modelem (dane nie opuszczają serwera):
+#   docker compose --profile ai up --build
+#   docker compose exec ollama ollama pull qwen2.5:7b
+#   i w backend/config.toml:   [llm] base_url = "http://ollama:11434/v1"  api_key = ""  model = "qwen2.5:7b"
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - dane:/app/backend/data                       # baza SQLite i zanonimizowane dokumenty
+      - ./backend/config.toml:/app/backend/config.toml:ro
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.11.10
+    profiles: ["ai"]
+    volumes:
+      - modele:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  dane:
+  modele:
