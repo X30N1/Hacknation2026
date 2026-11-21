@@ -30,7 +30,11 @@ async function http(method, path, body) {
     let msg = `Błąd serwera (${res.status})`
     try {
       const j = await res.json()
-      msg = j.blad || msg
+      // FastAPI: {"detail": "tekst"} albo przy walidacji (422) {"detail": [{"loc": [...], "msg": "..."}]}
+      const detail = Array.isArray(j.detail)
+        ? j.detail.map((d) => `${(d.loc || []).slice(1).join('.')}: ${d.msg}`).join('; ')
+        : j.detail
+      msg = j.blad || detail || msg
     } catch {
       /* odpowiedź bez JSON */
     }

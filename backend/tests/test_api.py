@@ -25,31 +25,6 @@ def test_llm_flow():
     assert client.post("/llm/request", json={"thread_id": 9999, "prompt": "x"}).status_code == 404
 
 
-def test_calendar():
-    ev = {
-        "name": "BKS.IV.1431.15.2026",
-        "add_date": "01-11-2026",
-        "due_date": "15-11-2026",
-        "response_date": None,
-        "status": False,
-        "initials": "ŁW",
-        "petition_id": 15,
-        "short_desc": "Wniosek o udostępnienie umów",
-        "intake_date": "01-11-2026",
-    }
-    r = client.post("/calendar", json=ev)
-    assert r.status_code == 201, r.text
-    assert r.json()["due_date"] == "15-11-2026"
-
-    client.post("/calendar", json={**ev, "petition_id": 16, "status": True, "due_date": "30-11-2026"})
-
-    assert len(client.get("/calendar").json()) >= 2
-    assert all(e["status"] is False for e in client.get("/calendar?status=false").json())
-    assert all(e["petition_id"] == 16 for e in client.get("/calendar?due_from=20-11-2026").json())
-    assert client.get("/calendar?due_from=2026-11-20").status_code == 422
-    assert client.post("/calendar", json={**ev, "due_date": "2026-11-15"}).status_code == 422
-
-
 def test_llm_health_echo():
     r = client.get("/llm/health")
     assert r.status_code == 200
@@ -80,3 +55,24 @@ def test_title_from_llm(monkeypatch):
     tid = client.post("/llm/request", json={"prompt": "Ile miasto wydało na latarnie?"}).json()["thread_id"]
     title = next(t["title"] for t in client.get("/llm/all").json() if t["id"] == tid)
     assert title == "Wydatki na oświetlenie uliczne"
+
+
+def test_health_frontend_shape(monkeypatch):
+    from app.config import settings
+
+    llm = client.get("/health").json()["llm"]
+    assert llm == {"backend": "echo", "model": "deepseek-chat", "dostepny": False,
+                   "zewnetrzny": False, "detail": llm["detail"]}
+
+    from app import llm_client
+
+    async def ok():
+        return {"status": "ok", "model": "deepseek-chat", "base_url": "x"}
+
+    monkeypatch.setattr(settings.llm, "api_key", "sk-test")
+    monkeypatch.setattr(llm_client, "health", ok)
+    assert client.get("/health").json()["llm"]["dostepny"] is True
+    assert client.get("/health").json()["llm"]["zewnetrzny"] is True
+
+    monkeypatch.setattr(settings.llm, "base_url", "http://192.168.1.10:11434/v1")
+    assert client.get("/health").json()["llm"]["zewnetrzny"] is False

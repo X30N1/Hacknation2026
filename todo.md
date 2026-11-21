@@ -9,8 +9,14 @@ Wartości w kodzie są tymczasowe – do ustalenia z zespołem / urzędem.
 
 | Limit | Obecnie | Gdzie | Uwagi |
 |---|---|---|---|
-| `short_desc` – długość opisu wniosku w kalendarzu | 500 znaków | `backend/app/schemas.py` (`SHORT_DESC_MAX`) | TODO z `APIDOC.md` |
-| `initials` – długość inicjałów urzędnika | 5 znaków | `backend/app/schemas.py` (`INITIALS_MAX`) | |
+| `przedmiot` sprawy | 2000 znaków | `backend/app/sprawy/model.py` (`PRZEDMIOT_MAX`) | dawny `short_desc`; propozycja z analizy: 160 (`analiza.py`) |
+| `wnioskodawca` | 300 znaków | `backend/app/sprawy/model.py` (`WNIOSKODAWCA_MAX`) | |
+| `inicjaly` | 20 znaków | `backend/app/sprawy/model.py` (`INICJALY_MAX`) | frontend: `maxLength=10`, xlsx: „Pracownik 1” – ujednolicić |
+| Tekst dokumentu (poprawka ręczna) | 1 000 000 znaków | `backend/app/sprawy/model.py` (`TEKST_MAX`) | |
+| Rodzaj dokumentu / skrót wydziału | 40 / 20 znaków | `backend/app/routers/sprawy.py` | docelowo słowniki |
+| Rozmiar wgrywanego pliku | 20 MB | `config.toml` `[pliki] max_mb` | |
+| OCR – maks. stron skanu | 20 | `config.toml` `[ocr] max_stron` | czas OCR ~ kilka s/stronę |
+| Tekst wniosku wysyłany do LLM przy analizie | 6000 znaków | `backend/app/sprawy/analiza.py` | |
 | `prompt` – długość zapytania urzędnika | 20 000 znaków | `backend/app/schemas.py` (`PROMPT_MAX`) | |
 | `context` – liczba dokumentów po OCR w jednym zapytaniu | 50 | `backend/app/schemas.py` (`CONTEXT_ITEMS_MAX`) | |
 | `context` – długość jednego dokumentu po OCR | 200 000 znaków | `backend/app/schemas.py` (`CONTEXT_ITEM_MAX`) | pilnować okna kontekstu modelu (DeepSeek: 64k–128k tokenów) |
@@ -23,7 +29,6 @@ Wartości w kodzie są tymczasowe – do ustalenia z zespołem / urzędem.
 | RAG – długość `snippet` w `sources` | 300 znaków | `backend/app/rag.py` (`SNIPPET_LEN`) | |
 | Timeout LLM | 120 s | `config.toml` `[llm]` | |
 | Timeout embeddingów | 30 s | `config.toml` `[rag.embeddings]` | |
-| Rozmiar wgrywanego pliku | – | – | do ustalenia razem z serwerem plików |
 | Rate limiting na użytkownika | – | – | do ustalenia razem z autoryzacją |
 
 ## Serwer plików z OCR jako źródło dla RAG (w stylu Google Drive)
@@ -39,7 +44,7 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 - [ ] Zasilenie przykładowymi wnioskami i odpowiedziami (`Hacknation 2026 - UMB/Przykładowe wnioski i odpowiedzi`) oraz podstawami prawnymi
 - [ ] Uprawnienia do plików (kto widzi jakie dokumenty), log dostępu
 - [ ] Reindeksacja po zmianie pliku / modelu OCR / modelu embeddingów
-- [ ] Ustalić relację z obecnym OCR po stronie użytkownika (`context` w `POST /llm/request`)
+- [ ] Ustalić relację OCR po stronie serwera (`/wnioski/analiza`) z polem `context` w `POST /llm/request` (OCR u użytkownika)
 
 ## RAG
 
@@ -54,13 +59,32 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 - [ ] Ewaluacja jakości wyszukiwania na przykładowych wnioskach
 - [ ] Struktura wydziałów UM Bydgoszczy (z BIP) jako źródło RAG – do wskazywania ścieżki
 
+## Integracja frontend ↔ backend
+
+- [ ] Widok czatu z asystentem we frontendzie (`/llm/*` nie są jeszcze nigdzie używane) – w tym `sources` z RAG
+- [ ] „Podobne sprawy z archiwum” i „Sugerowane wydziały” w widoku sprawy – backendu brak (RAG nad dokumentami spraw)
+- [ ] Widoki „Archiwum”, „Anonimizacja”, „Ustawienia” – backendu brak
+- [ ] Prefiks `/api`: w dev obcina go proxy Vite; przy serwowaniu `dist/` z FastAPI (Docker) – zamontować routery pod `/api` albo reverse proxy
+- [ ] `url_podgladu` jest względny wobec API (`/dokumenty/{id}/plik`) – frontend musi dodać `/api`
+- [ ] Format znacznika czasu w `/llm/*` (`GG-MM:DD-MM-RRRR`) vs ISO w sprawach – ujednolicić
+- [ ] Logika terminów jest zduplikowana w `frontend/src/api/mock.js` – przy zmianach reguł aktualizować oba miejsca lub usunąć mock
+- [ ] Słownik rodzajów dokumentów (`WNIOSEK`, `ODP_WYDZIALU`, …) i wydziałów – wspólny dla frontu i backendu
+
+## Sprawy i dokumenty
+
+- [ ] OCR: zainstalować pakiet językowy (Arch: `tesseract-data-pol`), bez niego skany zwracają pusty tekst
+- [ ] Uwagi z importu wymagające treści pism (w mocku: `ZNAK_W_TRESCI_INNY`, `DATA_WPLYWU_PIECZEC`, `PRZEDMIOT_NIEZGODNY`, `DATA_PISMA_INNA`) – porównanie xlsx z PDF-ami z archiwum
+- [ ] Termin w weekend / święto – ustalić zasadę (art. 57 § 4 KPA) i czy przesuwać termin automatycznie
+- [ ] Import archiwalnych pism (PDF) do istniejących spraw
+- [ ] Usuwanie / cofanie zdarzeń (pomyłka urzędnika) z zachowaniem historii
+- [ ] Przypomnienia o zbliżających się terminach (w aplikacji – bez wysyłki na zewnątrz)
+- [ ] Generowanie projektu odpowiedzi z dokumentów sprawy (LLM) jako dokument `PROJEKT`
+
 ## API
 
-- [ ] `PUT/PATCH /calendar/{id}` (zmiana statusu, `response_date`), `DELETE /calendar/{id}`
-- [ ] Automatyczne wyliczanie `due_date` (14 dni od wpływu, art. 13 ust. 1 UDIP; przedłużenie do 2 mies.)
-- [ ] Przypomnienia o zbliżających się terminach (w kalendarzu – bez automatycznej wysyłki na zewnątrz)
 - [ ] `DELETE /llm/{thread_id}`, zmiana tytułu wątku
-- [ ] Paginacja `GET /llm/all`, `GET /llm/{thread_id}`, `GET /calendar`
+- [ ] Powiązanie wątku czatu ze sprawą
+- [ ] Paginacja `GET /llm/all`, `GET /llm/{thread_id}`, `GET /sprawy`
 - [ ] Streaming odpowiedzi LLM (SSE)
 - [ ] Osobny endpoint anonimizacji dokumentu
 - [ ] Status RAG / embeddingów w `GET /llm/health`
@@ -78,7 +102,7 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 
 - [ ] Autoryzacja urzędników (np. SSO / LDAP urzędu, JWT)
 - [ ] Role i uprawnienia (urzędnik, kierownik, admin)
-- [ ] Przypisanie wątków i wniosków do użytkownika (`initials` z konta, nie z body)
+- [ ] Przypisanie wątków i spraw do użytkownika (`inicjaly` z konta, nie z body)
 - [ ] CORS dla frontendu
 - [ ] Rate limiting
 - [ ] Logi audytowe (kto, kiedy, jakie zapytanie) bez danych osobowych w logach
@@ -95,4 +119,4 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 
 - [ ] Dockerfile + docker-compose (backend, baza, serwer plików, OCR, Ollama)
 - [ ] CI: testy, lint (ruff), typy (mypy)
-- [ ] `.gitignore` w katalogu głównym repo (obecnie pusty)
+- [ ] `.gitignore` w katalogu głównym repo (usunięty w working tree)

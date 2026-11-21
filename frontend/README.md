@@ -1,6 +1,6 @@
 # Frontend – Asystent UDIP
 
-React 19 + Vite. Kontrakt z backendem: [../docs/API.md](../docs/API.md).
+React 19 + Vite. Kontrakt z backendem: [../backend/docs/APIDOC.md](../backend/docs/APIDOC.md).
 
 ```bash
 npm install

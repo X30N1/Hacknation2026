@@ -22,8 +22,30 @@ class DatabaseSettings(BaseModel):
     path: str = "data/app.db"
 
     def resolved(self) -> Path:
-        p = Path(self.path)
-        return p if p.is_absolute() else BACKEND_DIR / p
+        return _resolve(self.path)
+
+
+def _resolve(path: str) -> Path:
+    p = Path(path)
+    return p if p.is_absolute() else BACKEND_DIR / p
+
+
+class PlikiSettings(BaseModel):
+    # wgrane dokumenty; ścieżka względna liczona od katalogu backend/
+    katalog: str = "data/pliki"
+    max_mb: float = Field(20, gt=0)  # TODO: limit – rozmiar wgrywanego pliku
+
+    def resolved(self) -> Path:
+        return _resolve(self.katalog)
+
+
+class OCRSettings(BaseModel):
+    # Tesseract + pakiet językowy (Arch: tesseract-data-pol, Debian: tesseract-ocr-pol)
+    jezyk: str = "pol"
+    dpi: int = Field(300, ge=72, le=600)
+    max_stron: int = Field(20, ge=1)            # TODO: limit
+    # PDF z mniejszą liczbą znaków w warstwie tekstowej traktujemy jako skan
+    min_znakow_warstwy: int = Field(50, ge=0)
 
 
 class EmbeddingsSettings(BaseModel):
@@ -50,6 +72,8 @@ class RAGSettings(BaseModel):
 class Settings(BaseModel):
     llm: LLMSettings = LLMSettings()
     database: DatabaseSettings = DatabaseSettings()
+    pliki: PlikiSettings = PlikiSettings()
+    ocr: OCRSettings = OCRSettings()
     rag: RAGSettings = RAGSettings()
 
 

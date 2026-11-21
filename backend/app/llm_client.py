@@ -1,6 +1,8 @@
 """Klient LLM. Domyślnie DeepSeek (API zgodne z OpenAI); można wskazać lokalny serwer
 (np. Ollama / vLLM) w config.toml. Bez api_key dla DeepSeeka działa w trybie echo."""
+import ipaddress
 import time
+from urllib.parse import urlparse
 
 import httpx
 
@@ -14,6 +16,24 @@ TITLE_INPUT_MAX = 2000    # TODO: limit – ile znaków pytania/odpowiedzi idzie
 def is_echo_mode() -> bool:
     cfg = settings.llm
     return not cfg.api_key and "deepseek" in cfg.base_url
+
+
+def is_local() -> bool:
+    """Czy LLM działa lokalnie / w sieci urzędu (dane nie wychodzą na zewnątrz)."""
+    host = urlparse(settings.llm.base_url).hostname or ""
+    if host == "localhost" or host.endswith((".local", ".internal")):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private
+
+
+def backend_name() -> str:
+    if "deepseek" in settings.llm.base_url:
+        return "deepseek"
+    return "lokalny" if is_local() else "zewnętrzny"
 
 
 def _client(timeout: float | None = None) -> httpx.AsyncClient:
