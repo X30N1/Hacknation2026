@@ -129,7 +129,11 @@ table.cal { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .cal td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .cal tr.row { cursor: pointer; }
 .cal tr.row:hover td { filter: brightness(0.97); }
-.cal .przedmiot { max-width: 340px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cal .przedmiot-cell { min-width: 280px; max-width: 360px; }
+.cal .przedmiot {
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; line-height: 1.4; max-height: 2.8em; overflow-wrap: anywhere;
+}
 .row-PRZEKROCZONY td, .row-DZIS td { background: var(--danger-bg); }
 .row-PRZEKROCZONY td:first-child, .row-DZIS td:first-child { box-shadow: inset 5px 0 0 var(--danger); }
 .row-JUTRO td { background: var(--orange-bg); }

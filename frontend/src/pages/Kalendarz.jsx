@@ -121,7 +121,7 @@ export default function Kalendarz() {
                 <td>{i + 1}</td>
                 <td className="nowrap"><Link to={`/sprawy/${s.id}`} onClick={(e) => e.stopPropagation()}>{s.znak}</Link></td>
                 <td>{s.wnioskodawca || <span className="muted">—</span>}</td>
-                <td className="przedmiot" title={s.przedmiot}>{s.przedmiot}</td>
+                <td className="przedmiot-cell"><div className="przedmiot" title={s.przedmiot}>{s.przedmiot}</div></td>
                 <td className="nowrap">{formatPL(s.data_wplywu)}</td>
                 <td className="nowrap">
                   {s.termin ? <>{formatPL(s.termin)} <span className="muted">{weekdayPL(s.termin)}</span></> : <span className="muted">—</span>}
