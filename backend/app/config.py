@@ -1,7 +1,10 @@
 """Konfiguracja z pliku config.toml (w .gitignore). Wzór: config.example.toml.
 Brak pliku = wartości domyślne (bez klucza API -> tryb echo)."""
+import os
 import tomllib
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -61,9 +64,28 @@ class PlikiSettings(BaseModel):
 
 
 class OCRSettings(BaseModel):
-    # Tesseract + pakiet językowy (Arch: tesseract-data-pol, Debian: tesseract-ocr-pol)
-    jezyk: str = "pol"
-    dpi: int = Field(300, ge=72, le=600)
+    # GLM-OCR (https://huggingface.co/zai-org/GLM-OCR):
+    #   api = "ollama" – natywne /api/generate Ollamy (zalecane przez autorów modelu; endpoint zgodny
+    #                    z OpenAI w Ollamie ma ograniczenia przy obrazach), base_url bez /v1,
+    #   api = "openai" – vLLM / SGLang (--served-model-name glm-ocr), base_url z /v1.
+    api: Literal["ollama", "openai"] = "ollama"
+    base_url: str = "http://localhost:11434"
+    api_key: str = ""
+    model: str = "glm-ocr"
+    prompt: str = "Text Recognition:"
+    timeout: float = Field(600, gt=0)              # sekundy na jedną stronę (CPU: kilka minut)
+    max_tokens: int = Field(4096, ge=256)          # limit tekstu z jednej strony
+    # Kontekst modelu (tylko api = "ollama"): obraz strony A4 przy 200 dpi to ~4000 tokenów + tekst
+    # odpowiedzi. Domyślne 4096 Ollamy ucina wynik.
+    num_ctx: int = Field(16384, ge=2048)
+    # Skany to ORYGINAŁY – z niezamazanymi danymi osobowymi. Domyślnie tylko serwer lokalny.
+    zezwol_zewnetrzny: bool = False
+    dpi: int = Field(150, ge=72, le=600)
+    # Dłuższy bok obrazu strony w pikselach – czas OCR rośnie szybko z rozmiarem obrazu
+    # (CPU, strona 1695×2434 px: ~4 min). Duże skany są zmniejszane do tej wartości.
+    max_bok_px: int = Field(1600, ge=600, le=6000)
+    # Wątki CPU dla Ollamy (tylko api = "ollama"); puste = wybór Ollamy (zwykle rdzenie wydajne).
+    num_thread: int | None = Field(None, ge=1)
     max_stron: int = Field(20, ge=1)            # TODO: limit
     # PDF z mniejszą liczbą znaków w warstwie tekstowej traktujemy jako skan
     min_znakow_warstwy: int = Field(50, ge=0)
@@ -83,11 +105,26 @@ class Settings(BaseModel):
     anonimizacja: AnonimizacjaSettings = AnonimizacjaSettings()
 
 
-def load_settings(path: Path = CONFIG_PATH) -> Settings:
-    if not path.is_file():  # brak pliku (albo katalog utworzony przez montowanie w Dockerze)
-        return Settings()
-    with path.open("rb") as f:
-        return Settings.model_validate(tomllib.load(f))
+ENV_PREFIX = "APP_"
+
+
+def _z_env(dane: dict, env: Mapping[str, str]) -> dict:
+    """APP_<SEKCJA>_<KLUCZ> nadpisuje wartość z pliku, np. APP_OCR_BASE_URL=http://ollama:11434/v1
+    (docker-compose.yml) – ten sam config.toml działa w Dockerze i przy pracy lokalnej."""
+    for sekcja, model in Settings.model_fields.items():
+        for klucz in model.annotation.model_fields:
+            wartosc = env.get(f"{ENV_PREFIX}{sekcja}_{klucz}".upper())
+            if wartosc is not None:
+                dane.setdefault(sekcja, {})[klucz] = wartosc
+    return dane
+
+
+def load_settings(path: Path = CONFIG_PATH, env: Mapping[str, str] | None = None) -> Settings:
+    dane = {}
+    if path.is_file():  # brak pliku (albo katalog utworzony przez montowanie w Dockerze) = domyślne
+        with path.open("rb") as f:
+            dane = tomllib.load(f)
+    return Settings.model_validate(_z_env(dane, os.environ if env is None else env))
 
 
 settings = load_settings()

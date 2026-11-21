@@ -7,21 +7,24 @@
 
 ## W urzędzie (Docker)
 ```bash
-docker compose up --build        # http://localhost:8000
+docker compose run --rm ollama-pobierz   # jednorazowo: model OCR glm-ocr (jedyny krok z internetem)
+docker compose up --build                # http://localhost:8000
 ```
-Jeden obraz: frontend, API, OCR (Tesseract z językiem polskim) i dane startowe – kalendarium xlsx,
-10 wniosków testowych z terminami względem dzisiejszej daty, archiwum przykładowych pism
-i podstawy prawne z paczki UMB. Baza i dokumenty trwają w wolumenie `dane`.
+Obraz aplikacji: frontend, API i dane startowe – kalendarium xlsx, archiwum przykładowych pism
+i podstawy prawne z paczki UMB. Skany rozpoznaje **GLM-OCR** w kontenerze Ollamy (sieć wewnętrzna,
+bez internetu). Baza i dokumenty trwają w wolumenie `dane`, modele w wolumenie `modele`.
 
 ## Dewelopersko
 ```bash
 cd backend && uv sync && uv run python -m app.seed --archiwum && uv run uvicorn main:app --reload
 cd frontend && npm install && npm run dev   # http://localhost:5173 (proxy /api -> :8000)
 ```
-Windows: Tesseract z instalatora UB Mannheim (z językiem Polish) – backend znajdzie go także poza PATH.
+OCR skanów lokalnie: zainstaluj Ollamę i `ollama pull glm-ocr` (backend łączy się z `http://localhost:11434`).
+Zamiast Ollamy można użyć vLLM / SGLang: `[ocr] api = "openai"`, `base_url = "http://<serwer>:8080/v1"`.
+Bez serwera OCR skany wracają z pustym tekstem do wpisania ręcznie.
 
 # Model językowy – działanie bez internetu
-Aplikacja działa w pełni **bez modelu**: OCR, kalendarz, wyszukiwanie w archiwum (SQLite FTS5),
+Aplikacja działa w pełni **bez modelu językowego**: OCR (GLM-OCR), kalendarz, wyszukiwanie w archiwum (SQLite FTS5),
 wydziały z archiwum i słów kluczowych, projekt pisma z szablonu, anonimizacja wzorcami.
 Model (API zgodne z OpenAI) dodaje: imiona, nazwiska i dane wrażliwe w anonimizacji, uzasadnione
 propozycje wydziałów i redakcję projektu pisma.
@@ -30,15 +33,15 @@ propozycje wydziałów i redakcję projektu pisma.
   czerwony baner, gdy model działa poza urzędem.
 - Docelowo w urzędzie: model lokalny przez Ollamę, bez dostępu do internetu, np. **Qwen2.5 7B Instruct**
   (dobra obsługa polskiego i JSON, działa na pojedynczym GPU / mocnym CPU) albo polski **Bielik 11B**
-  (SpeakLeash). Uruchomienie: jednorazowo `MODEL=qwen2.5:7b docker compose run --rm ollama-pobierz`
-  (jedyny krok z internetem), potem `docker compose --profile ai up`, a w `config.toml`:
+  (SpeakLeash). Uruchomienie: jednorazowo `MODEL="glm-ocr qwen2.5:7b" docker compose run --rm ollama-pobierz`
+  (jedyny krok z internetem), potem `docker compose up`, a w `config.toml`:
   `[llm] base_url = "http://ollama:11434/v1"`, `api_key = ""`, `model = "qwen2.5:7b"`.
   Ollama działa w wewnętrznej sieci `llm`: widzi tylko aplikację, bez internetu i bez opublikowanych portów.
 
 # Jak to spełnia wymagania wyzwania
 | Wymaganie | Gdzie |
 |---|---|
-| Wgrywanie PDF / Word / skanów | Nowy wniosek, Dokumenty w sprawie (OCR Tesseract) |
+| Wgrywanie PDF / Word / skanów | Nowy wniosek, Dokumenty w sprawie (OCR GLM-OCR) |
 | Kalendarz wniosków | Kalendarz: tabela od najstarszego, dni do terminu, podświetlenie terminu dziś / jutro, wybór roku, widok miesiąca |
 | Statusy a)–e) | Brak działań → Zapytania w wydziałach → Kwerenda (+dni) → Odpowiedź przygotowana → Wysłana |
 | Anonimizacja | Każdy dokument przed zapisem: dane na szaro → po akceptacji na czarno; do bazy trafia tylko wersja zanonimizowana, serwer odrzuca niezamazany PESEL / dowód |
@@ -47,18 +50,3 @@ propozycje wydziałów i redakcję projektu pisma.
 | Projekt odpowiedzi | Odpowiedź wydziału – wgraj plik → Przygotuj projekt odpowiedzi → sprawdzenie → anonimizacja → .docx / .txt |
 | „Uczenie się” na ustawach i archiwum | Archiwum i wiedza → baza wiedzy (dodawanie, usuwanie starych wersji) |
 | Brak wysyłki i integracji | Aplikacja tylko zapisuje, co zrobił urzędnik; pliki pobiera on sam |
-
-# Struktura
-LLM - Wstępnie hostowany Deepseek, z możliwością zmiany API na lokalne (testy)
-
-# Podział obowiązków
-## Backend - Łukasz Wronka
-Zakres obowiązków:
-- Fastapi REST do
-  - RAGA
-  - BAZY DANYCH (dane szyfrowane in transit)
-  - Autoryzacja
-  - Security
-- Konteneryzacja do dockera
-- Testy i CI
-## ????

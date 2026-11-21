@@ -14,9 +14,9 @@ def is_echo_mode() -> bool:
     return not cfg.api_key and "deepseek" in cfg.base_url
 
 
-def is_local() -> bool:
-    """Czy LLM działa lokalnie / w sieci urzędu (dane nie wychodzą na zewnątrz)."""
-    host = urlparse(settings.llm.base_url).hostname or ""
+def is_local(url: str | None = None) -> bool:
+    """Czy serwer (domyślnie LLM z [llm]) działa lokalnie / w sieci urzędu – dane nie wychodzą na zewnątrz."""
+    host = urlparse(settings.llm.base_url if url is None else url).hostname or ""
     if not host:
         return False
     # Nazwa bez kropki (np. „ollama” – usługa w sieci docker compose) nie jest domeną internetową,

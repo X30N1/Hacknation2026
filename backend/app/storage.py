@@ -82,9 +82,12 @@ class Store:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.close()
         # TODO: przy większym ruchu – pula połączeń / async driver
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        # timeout + WAL: seed (osobny proces przy starcie kontenera) i serwer piszą do tej samej bazy
+        self._conn = sqlite3.connect(path, check_same_thread=False, timeout=30)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
+        if path != ":memory:":
+            self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.executescript(SCHEMA)
         self._migrate()
 

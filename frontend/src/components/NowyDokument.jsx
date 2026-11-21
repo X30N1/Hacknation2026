@@ -55,7 +55,7 @@ export default function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj
       </div>
       {blad && <div className="card error" role="alert">{blad}</div>}
       {!odczyt && !blad && (
-        <p className="muted"><span className="spinner" aria-hidden="true" /> Odczytuję dokument… (skany mogą potrwać do minuty)</p>
+        <p className="muted"><span className="spinner" aria-hidden="true" /> Odczytuję dokument… (skany rozpoznawane przez OCR mogą potrwać kilka minut)</p>
       )}
       {odczyt && (
         <>

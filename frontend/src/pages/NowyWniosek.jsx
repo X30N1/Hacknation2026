@@ -84,7 +84,7 @@ export default function NowyWniosek() {
           onKeyDown={(e) => e.key === 'Enter' && input.current?.click()}
         >
           {etap === 'analiza' ? (
-            <p><span className="spinner" aria-hidden="true" /> Odczytuję wniosek… (skany mogą potrwać do minuty)</p>
+            <p><span className="spinner" aria-hidden="true" /> Odczytuję wniosek… (skany rozpoznawane przez OCR mogą potrwać kilka minut)</p>
           ) : (
             <>
               <p className="dz-title">Przeciągnij tutaj plik wniosku</p>

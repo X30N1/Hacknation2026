@@ -65,7 +65,7 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - nazwa_pliku: str
 - wydzial: str | null
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
-- ocr_pewnosc: float | null (0–1, tylko OCR)
+- ocr_pewnosc: float | null (tylko OCR: null = wszystkie strony odczytane – GLM-OCR nie podaje pewności; 0–1 = odsetek odczytanych stron, 0 = serwer OCR niedostępny)
 - tekst: str
 
 ## GET /sprawy
@@ -122,7 +122,7 @@ jego zanonimizowany tekst jako plik Word.
 ### Obiekt Odczyt
 - nazwa_pliku: str
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
-- ocr_pewnosc: float | null (0–1, tylko OCR)
+- ocr_pewnosc: float | null (tylko OCR: null = wszystkie strony odczytane – GLM-OCR nie podaje pewności; 0–1 = odsetek odczytanych stron, 0 = serwer OCR niedostępny)
 - tekst: str
 
 ## POST /dokumenty/odczyt
