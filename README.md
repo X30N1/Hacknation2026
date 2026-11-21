@@ -30,8 +30,10 @@ propozycje wydziałów i redakcję projektu pisma.
   czerwony baner, gdy model działa poza urzędem.
 - Docelowo w urzędzie: model lokalny przez Ollamę, bez dostępu do internetu, np. **Qwen2.5 7B Instruct**
   (dobra obsługa polskiego i JSON, działa na pojedynczym GPU / mocnym CPU) albo polski **Bielik 11B**
-  (SpeakLeash). Uruchomienie: `docker compose --profile ai up`, `docker compose exec ollama ollama pull qwen2.5:7b`,
-  a w `config.toml`: `[llm] base_url = "http://ollama:11434/v1"`, `api_key = ""`, `model = "qwen2.5:7b"`.
+  (SpeakLeash). Uruchomienie: jednorazowo `MODEL=qwen2.5:7b docker compose run --rm ollama-pobierz`
+  (jedyny krok z internetem), potem `docker compose --profile ai up`, a w `config.toml`:
+  `[llm] base_url = "http://ollama:11434/v1"`, `api_key = ""`, `model = "qwen2.5:7b"`.
+  Ollama działa w wewnętrznej sieci `llm`: widzi tylko aplikację, bez internetu i bez opublikowanych portów.
 
 # Jak to spełnia wymagania wyzwania
 | Wymaganie | Gdzie |

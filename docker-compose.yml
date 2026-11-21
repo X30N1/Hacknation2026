@@ -4,9 +4,15 @@
 # pełnotekstowe), wydziały ze słów kluczowych i archiwum, projekt pisma z szablonu, anonimizacja wzorcami.
 #
 # Z lokalnym modelem (dane nie opuszczają serwera):
-#   docker compose --profile ai up --build
-#   docker compose exec ollama ollama pull qwen2.5:7b
-#   i w backend/config.toml:   [llm] base_url = "http://ollama:11434/v1"  api_key = ""  model = "qwen2.5:7b"
+#   1. jednorazowo pobierz model (jedyny krok z dostępem do internetu):
+#        MODEL=qwen2.5:7b docker compose run --rm ollama-pobierz
+#   2. docker compose --profile ai up --build
+#   3. w backend/config.toml:   [llm] base_url = "http://ollama:11434/v1"  api_key = ""  model = "qwen2.5:7b"
+#
+# Sieci:
+#   default – aplikacja i port 8000 dla urzędników,
+#   llm     – sieć wewnętrzna (internal): tylko aplikacja <-> ollama. Ollama nie ma dostępu do internetu,
+#             nie publikuje portów i nie widzi innych kontenerów.
 services:
   app:
     build: .
@@ -15,6 +21,9 @@ services:
     volumes:
       - dane:/app/backend/data
       - ./backend/config.toml:/app/backend/config.toml:ro
+    networks:
+      - default
+      - llm
     restart: unless-stopped
 
   ollama:
@@ -22,7 +31,28 @@ services:
     profiles: ["ai"]
     volumes:
       - modele:/root/.ollama
+    networks:
+      - llm
     restart: unless-stopped
+
+  # Pobieranie modelu do wolumenu „modele” – osobny, jednorazowy kontener z dostępem do internetu,
+  # bez dostępu do sieci llm (nie widzi aplikacji ani jej danych).
+  ollama-pobierz:
+    image: ollama/ollama:0.11.10
+    profiles: ["model"]
+    volumes:
+      - modele:/root/.ollama
+    networks:
+      - default
+    environment:
+      MODEL: ${MODEL:-qwen2.5:7b}
+    entrypoint: ["/bin/sh", "-c"]
+    command: ['ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; ollama pull "$$MODEL"']
+
+networks:
+  default:
+  llm:
+    internal: true
 
 volumes:
   dane:

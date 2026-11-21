@@ -17,7 +17,11 @@ def is_echo_mode() -> bool:
 def is_local() -> bool:
     """Czy LLM działa lokalnie / w sieci urzędu (dane nie wychodzą na zewnątrz)."""
     host = urlparse(settings.llm.base_url).hostname or ""
-    if host == "localhost":
+    if not host:
+        return False
+    # Nazwa bez kropki (np. „ollama” – usługa w sieci docker compose) nie jest domeną internetową,
+    # więc rozwiązuje się tylko w sieci lokalnej / urzędu.
+    if host == "localhost" or "." not in host:
         return True
     try:
         ip = ipaddress.ip_address(host)

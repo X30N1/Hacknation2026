@@ -24,3 +24,20 @@ def test_health_frontend_shape(monkeypatch):
 
     monkeypatch.setattr(settings.llm, "base_url", "http://192.168.1.10:11434/v1")
     assert client.get("/health").json()["llm"]["zewnetrzny"] is False
+
+
+def test_is_local(monkeypatch):
+    from app import llm_client
+    from app.config import settings
+
+    for url, lokalny in [
+        ("http://ollama:11434/v1", True),             # usługa w docker compose
+        ("http://localhost:11434/v1", True),
+        ("http://127.0.0.1:11434/v1", True),
+        ("http://192.168.1.10:11434/v1", True),
+        ("https://api.deepseek.com", False),
+        ("http://8.8.8.8/v1", False),
+        ("", False),
+    ]:
+        monkeypatch.setattr(settings.llm, "base_url", url)
+        assert llm_client.is_local() is lokalny, url
