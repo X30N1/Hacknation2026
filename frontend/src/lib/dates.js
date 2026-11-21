@@ -33,11 +33,6 @@ export function diffDays(a, b) {
   return Math.round((parseISO(a) - parseISO(b)) / DAY)
 }
 
-export function isWeekend(iso) {
-  const wd = new Date(parseISO(iso)).getUTCDay()
-  return wd === 0 || wd === 6
-}
-
 const DNI = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb']
 
 export function formatPL(iso) {

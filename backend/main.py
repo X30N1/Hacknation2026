@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException
 
 from app import llm_client
 from app.config import settings
-from app.routers import anonimizacja, archiwum, llm, sprawy
+from app.routers import anonimizacja, archiwum, sprawy
 from app.storage import store
 
 
@@ -26,7 +26,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(llm.router)
 app.include_router(sprawy.router)
 app.include_router(anonimizacja.router)
 app.include_router(archiwum.router)

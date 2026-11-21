@@ -2,7 +2,6 @@
 Brak pliku = wartości domyślne (bez klucza API -> tryb echo)."""
 import tomllib
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -10,11 +9,33 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = BACKEND_DIR / "config.toml"
 
 
+class LLMLimity(BaseModel):
+    # Ile tekstu (w znakach) trafia do modelu w poszczególnych zadaniach.
+    przedmiot_max: int = Field(160, ge=20)            # propozycja „przedmiotu” w formularzu wniosku
+    wniosek_analiza: int = Field(6000, ge=500)        # wniosek → wnioskodawca i przedmiot
+    wniosek_wydzialy: int = Field(4000, ge=500)       # wniosek → sugerowane wydziały
+    anonimizacja_fragment: int = Field(6000, ge=500)  # tekst w jednym zapytaniu anonimizacji
+    anonimizacja_fragmenty: int = Field(10, ge=1)     # maks. zapytań na dokument (dalej tylko wzorce)
+    projekt_material: int = Field(6000, ge=500)       # jeden materiał w projekcie odpowiedzi
+    projekt_wzor: int = Field(2500, ge=0)             # odpowiedź archiwalna jako wzór stylu
+    uzasadnienie_max: int = Field(300, ge=20)         # uzasadnienie sugerowanego wydziału
+
+
+class LLMTemperatury(BaseModel):
+    # 0 = odpowiedzi powtarzalne (ekstrakcja, JSON); wyżej = swobodniejszy styl tekstu.
+    analiza: float = Field(0, ge=0, le=2)        # wnioskodawca i przedmiot z wniosku
+    wydzialy: float = Field(0, ge=0, le=2)       # sugerowane wydziały
+    anonimizacja: float = Field(0, ge=0, le=2)   # dane do zamazania
+    projekt: float = Field(0.2, ge=0, le=2)      # projekt odpowiedzi
+
+
 class LLMSettings(BaseModel):
     base_url: str = "https://api.deepseek.com"
     api_key: str = ""
     model: str = "deepseek-chat"
     timeout: float = Field(120, gt=0)
+    limity: LLMLimity = LLMLimity()
+    temperatury: LLMTemperatury = LLMTemperatury()
 
 
 class DatabaseSettings(BaseModel):
@@ -48,27 +69,6 @@ class OCRSettings(BaseModel):
     min_znakow_warstwy: int = Field(50, ge=0)
 
 
-class EmbeddingsSettings(BaseModel):
-    # API zgodne z OpenAI /embeddings (np. Ollama: http://localhost:11434/v1).
-    # Puste base_url = brak wyszukiwania wektorowego, tylko pełnotekstowe (FTS5).
-    base_url: str = ""
-    api_key: str = ""
-    model: str = "nomic-embed-text"
-    timeout: float = Field(30, gt=0)
-
-
-class RAGSettings(BaseModel):
-    # tool = model sam wywołuje wyszukiwanie (function calling)
-    # auto = wyniki doklejane do każdego zapytania (dla modeli bez function calling)
-    # off  = brak RAG
-    mode: Literal["tool", "auto", "off"] = "tool"
-    top_k: int = Field(5, ge=1, le=50)            # TODO: limit
-    chunk_size: int = Field(1200, ge=200)         # TODO: limit (znaki)
-    chunk_overlap: int = Field(200, ge=0)         # TODO: limit (znaki)
-    max_tool_rounds: int = Field(3, ge=1, le=10)  # TODO: limit
-    embeddings: EmbeddingsSettings = EmbeddingsSettings()
-
-
 class AnonimizacjaSettings(BaseModel):
     # LLM uzupełnia wzorce o imiona i nazwiska bez kontekstu oraz dane wrażliwe.
     # Tekst dokumentu trafia do modelu z [llm] – na produkcji model lokalny.
@@ -80,7 +80,6 @@ class Settings(BaseModel):
     database: DatabaseSettings = DatabaseSettings()
     pliki: PlikiSettings = PlikiSettings()
     ocr: OCRSettings = OCRSettings()
-    rag: RAGSettings = RAGSettings()
     anonimizacja: AnonimizacjaSettings = AnonimizacjaSettings()
 
 

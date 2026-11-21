@@ -73,14 +73,3 @@ def test_llm_blad(monkeypatch):
     monkeypatch.setattr(llm_client, "complete", broken)
     r = client.post("/anonimizacja", json={"tekst": TEKST}).json()
     assert r["llm_uzyty"] is True and r["uwagi"] and frag(r, "PESEL")
-
-
-def test_dokument_sprawy():
-    s = client.post("/sprawy", json={"znak": "BKS.IV.1431.200.2026", "data_wplywu": "2026-11-16",
-                                     "wnioskodawca": "Anna Nowak"}).json()
-    d = client.post(f"/sprawy/{s['id']}/dokumenty", data={"rodzaj": "WNIOSEK"},
-                    files={"plik": ("w.txt", "Pisze Anna Nowak, adres a.nowak@wp.pl".encode())}).json()
-    r = client.get(f"/dokumenty/{d['id']}/anonimizacja").json()
-    assert [(f["tekst"], f["zrodlo"]) for f in r["fragmenty"]] == \
-        [("Anna Nowak", "SPRAWA"), ("a.nowak@wp.pl", "WZORZEC")]
-    assert client.get("/dokumenty/9999/anonimizacja").status_code == 404

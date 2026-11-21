@@ -12,6 +12,7 @@ import logging
 from datetime import date
 
 from app import llm_client
+from app.config import settings
 from app.prompts import SYSTEM_PROMPT
 from app.sprawy import archiwum, wydzialy
 from app.sprawy.model import ProjektOdpowiedzi, SprawaSzczegoly
@@ -20,8 +21,6 @@ log = logging.getLogger(__name__)
 
 NAGLOWEK = "PROJEKT – wymaga weryfikacji urzędnika"
 ZNACZNIK = "[WNIOSKODAWCA]"
-MATERIAL_MAX = 6000   # TODO: limit – znaki jednego materiału w zapytaniu do LLM
-WZOR_MAX = 2500       # TODO: limit – znaki odpowiedzi archiwalnej (wzór stylu)
 
 
 def _pl(d: date | None) -> str:
@@ -69,21 +68,23 @@ publicznej, wyłącznie na podstawie poniższych materiałów.
 - Zwróć sam tekst pisma, bez Markdown i bez komentarzy."""
 
 
-def _blok(tytul: str, tekst: str, maks: int = MATERIAL_MAX) -> str:
+def _blok(tytul: str, tekst: str, maks: int | None = None) -> str:
+    maks = settings.llm.limity.projekt_material if maks is None else maks
     return f"### {tytul}\n{tekst.strip()[:maks]}"
 
 
 async def _z_llm(s: SprawaSzczegoly, dzis: date, wnioski, odpowiedzi, wzory, wiedza) -> str:
     bloki = [_blok(f"Wniosek ({d.nazwa_pliku})", d.tekst) for d in wnioski]
     bloki += [_blok(f"Odpowiedź: {_nazwa(d.wydzial)} ({d.nazwa_pliku})", d.tekst) for d in odpowiedzi]
-    bloki += [_blok(f"Wzór stylu – odpowiedź w sprawie {znak}", t, WZOR_MAX) for znak, t in wzory]
+    wzor_max = settings.llm.limity.projekt_wzor
+    bloki += [_blok(f"Wzór stylu – odpowiedź w sprawie {znak}", t, wzor_max) for znak, t in wzory]
     bloki += [_blok(f"Podstawa prawna ({n})", t) for n, t in wiedza]
     polecenie = POLECENIE.format(naglowek=NAGLOWEK, data=_pl(dzis), znak=s.znak, znacznik=ZNACZNIK,
                                  wplyw=_pl(s.data_wplywu))
     tresc = f"{polecenie}\n\nPrzedmiot wniosku: {s.przedmiot or '—'}\n\n" + "\n\n".join(bloki)
     return await llm_client.complete(
         [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": tresc}],
-        temperature=0.2,
+        temperature=settings.llm.temperatury.projekt,
     )
 
 

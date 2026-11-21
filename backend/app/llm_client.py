@@ -7,10 +7,6 @@ from urllib.parse import urlparse
 import httpx
 
 from app.config import settings
-from app.prompts import SYSTEM_PROMPT, TITLE_PROMPT
-
-TITLE_MAX = 60            # TODO: limit – długość tytułu wątku
-TITLE_INPUT_MAX = 2000    # TODO: limit – ile znaków pytania/odpowiedzi idzie do tytułu
 
 
 def is_echo_mode() -> bool:
@@ -42,29 +38,11 @@ def _client(timeout: float | None = None) -> httpx.AsyncClient:
     )
 
 
-def user_content(prompt: str, context: list[str] | None = None) -> str:
-    """Treść wiadomości urzędnika wysyłana do LLM (prompt + dokumenty po OCR)."""
-    if not context:
-        return prompt
-    joined = "\n\n---\n\n".join(context)
-    return f"Kontekst (dokumenty po OCR):\n{joined}\n\nPolecenie:\n{prompt}"
-
-
-def build_messages(history: list[dict], prompt: str, context: list[str]) -> list[dict]:
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        *history,
-        {"role": "user", "content": user_content(prompt, context)},
-    ]
-
-
-async def chat(messages: list[dict], tools: list[dict] | None = None, **params) -> dict:
-    """Zwraca całą wiadomość asystenta (może zawierać tool_calls)."""
+async def chat(messages: list[dict], **params) -> dict:
+    """Zwraca całą wiadomość asystenta."""
     if is_echo_mode():
         return {"role": "assistant", "content": f"[echo] {messages[-1]['content']}"}
     body = {"model": settings.llm.model, "messages": messages, **params}
-    if tools:
-        body["tools"] = tools
     async with _client() as client:
         resp = await client.post("/chat/completions", json=body)
         resp.raise_for_status()
@@ -73,29 +51,6 @@ async def chat(messages: list[dict], tools: list[dict] | None = None, **params) 
 
 async def complete(messages: list[dict], **params) -> str:
     return (await chat(messages, **params)).get("content") or ""
-
-
-def _fallback_title(prompt: str) -> str:
-    title = " ".join(prompt.split())
-    return title if len(title) <= TITLE_MAX else title[: TITLE_MAX - 1] + "…"
-
-
-async def generate_title(prompt: str, answer: str) -> str:
-    """Tytuł wątku na bazie pierwszego pytania i odpowiedzi.
-    Przy błędzie LLM – obcięty prompt, żeby nie blokować rozmowy."""
-    if is_echo_mode():
-        return _fallback_title(prompt)
-    try:
-        title = await complete(
-            [{"role": "user", "content": TITLE_PROMPT.format(
-                prompt=prompt[:TITLE_INPUT_MAX], answer=answer[:TITLE_INPUT_MAX])}],
-            max_tokens=30,
-            temperature=0.3,
-        )
-    except Exception:  # noqa: BLE001
-        return _fallback_title(prompt)
-    title = title.strip().strip('"„”\'').rstrip(".").splitlines()[0] if title.strip() else ""
-    return _fallback_title(title or prompt)
 
 
 async def health() -> dict:

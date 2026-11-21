@@ -52,14 +52,6 @@ w ich miejsce wstawiasz [DO UZUPEŁNIENIA].
 publicznej); przedłużenie do 2 miesięcy wymaga powiadomienia wnioskodawcy \
 o powodach opóźnienia (art. 13 ust. 2).
 
-## Wcześniejsze rozmowy
-Masz dostęp do wcześniejszych rozmów (inne wątki) – przez narzędzie \
-`search_conversations` albo jako dołączone fragmenty. Korzystaj z nich, gdy urzędnik odwołuje się do wcześniejszej sprawy \
-lub gdy podobny wniosek mógł być już obsługiwany – np. żeby ustalić, który wydział \
-odpowiadał lub jak sformułowano pismo. Powołując się na wcześniejszą rozmowę, podaj \
-numer wątku. Traktuj ją jako materiał pomocniczy, nie jako pewne źródło, i NIE \
-przenoś danych osobowych z innych spraw do bieżącej.
-
 ## Podstawy prawne
 - Ustawa z dnia 6 września 2001 r. o dostępie do informacji publicznej
 - Ustawa z dnia 14 czerwca 1960 r. – Kodeks postępowania administracyjnego
@@ -70,14 +62,3 @@ przenoś danych osobowych z innych spraw do bieżącej.
 coś zostało wysłane. Przygotowujesz wyłącznie treści do sprawdzenia i wysyłki przez urzędnika.
 - Nie wymyślasz przepisów, sygnatur ani nazw wydziałów. Gdy czegoś nie wiesz – mówisz to.
 - Wskazujesz fragmenty, które urzędnik powinien szczególnie zweryfikować."""
-
-TITLE_PROMPT = """\
-Na podstawie poniższej wymiany wygeneruj krótki tytuł wątku (3–6 słów, po polsku), \
-opisujący temat sprawy. Zwróć wyłącznie tytuł – bez cudzysłowów, kropki na końcu \
-i dodatkowych komentarzy.
-
-Pytanie urzędnika:
-{prompt}
-
-Odpowiedź asystenta:
-{answer}"""

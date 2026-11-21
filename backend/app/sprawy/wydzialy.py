@@ -17,13 +17,13 @@ from collections import Counter
 from datetime import date
 
 from app import llm_client
+from app.config import settings
 from app.sprawy import archiwum
 from app.sprawy.model import SugestiaWydzialu, SugestieWydzialow
 
 log = logging.getLogger(__name__)
 
 MAKS_SUGESTII = 4
-TEKST_DO_LLM_MAX = 4000  # TODO: limit – znaki wniosku wysyłane do LLM
 
 # skrót: (nazwa z BIP, prefiksy słów kluczowych – małe litery)
 JEDNOSTKI: dict[str, tuple[str, list[str]]] = {
@@ -141,10 +141,11 @@ async def z_llm(tekst: str) -> list[SugestiaWydzialu]:
     if llm_client.is_echo_mode() or not tekst.strip():
         return []
     lista = "\n".join(f"{k} – {n}" for k, (n, _) in JEDNOSTKI.items())
+    limity = settings.llm.limity
     try:
         odp = await llm_client.complete(
-            [{"role": "user", "content": PROMPT.format(lista=lista, tekst=tekst[:TEKST_DO_LLM_MAX])}],
-            temperature=0, response_format={"type": "json_object"},
+            [{"role": "user", "content": PROMPT.format(lista=lista, tekst=tekst[:limity.wniosek_wydzialy])}],
+            temperature=settings.llm.temperatury.wydzialy, response_format={"type": "json_object"},
         )
         m = re.search(r"\{.*\}", odp, re.S)
         dane = json.loads(m.group(0)) if m else {}
@@ -155,8 +156,9 @@ async def z_llm(tekst: str) -> list[SugestiaWydzialu]:
     for p in dane.get("wydzialy") or []:
         skrot = SKROTY.get(str(p.get("skrot", "")).strip().upper())
         if skrot:  # tylko jednostki z listy – model nie może wymyślić wydziału
+            uzasadnienie = str(p.get("uzasadnienie") or "").strip()[:limity.uzasadnienie_max]
             out.append(SugestiaWydzialu(skrot=skrot, nazwa=JEDNOSTKI[skrot][0], zrodlo="LLM",
-                                        uzasadnienie=str(p.get("uzasadnienie") or "").strip()[:300]))
+                                        uzasadnienie=uzasadnienie))
     return out
 
 

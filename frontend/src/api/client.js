@@ -1,8 +1,6 @@
 // Klient API zgodny z backend/docs/APIDOC.md (w dev: proxy Vite /api → localhost:8000).
 import { ApiError } from './errors'
 
-export { ApiError }
-
 function qs(params = {}) {
   const p = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
   return p.length ? '?' + new URLSearchParams(p).toString() : ''
@@ -55,7 +53,6 @@ export const api = {
   odczytajWniosek: (plik) => http('POST', '/wnioski/odczyt', form({ plik })),
   odczytajDokument: (plik) => http('POST', '/dokumenty/odczyt', form({ plik })),
   utworzSprawe: (dane) => http('POST', '/sprawy', dane),
-  edytujSprawe: (id, dane) => http('PATCH', `/sprawy/${id}`, dane),
   dodajZdarzenie: (id, dane) => http('POST', `/sprawy/${id}/zdarzenia`, dane),
   dodajDokument: (id, plik, rodzaj, wydzial) =>
     http('POST', `/sprawy/${id}/dokumenty`, form({ plik, rodzaj, wydzial })),

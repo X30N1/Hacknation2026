@@ -83,7 +83,6 @@ class Dokument(BaseModel):
     metoda: Metoda
     ocr_pewnosc: float | None = None
     tekst: str
-    url_podgladu: str
 
 
 class SprawaLista(BaseModel):
@@ -134,13 +133,6 @@ class SprawaUtworz(_Wejscie):
     @classmethod
     def _puste(cls, v):
         return v or None
-
-
-class SprawaEdytuj(_Wejscie):
-    wnioskodawca: str | None = Field(None, max_length=WNIOSKODAWCA_MAX)
-    przedmiot: str | None = Field(None, max_length=PRZEDMIOT_MAX)
-    inicjaly: str | None = Field(None, max_length=INICJALY_MAX)
-    data_wplywu: date | None = None
 
 
 class ZdarzenieDodaj(_Wejscie):

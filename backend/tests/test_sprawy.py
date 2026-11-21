@@ -117,14 +117,6 @@ def test_doprecyzowanie_i_bez_rozpoznania():
     assert zdarzenie(sid, "BEZ_ROZPOZNANIA").json()["status"] == "BEZ_ROZPOZNANIA"
 
 
-def test_edycja():
-    s = nowa()
-    r = client.patch(f"/sprawy/{s['id']}", json={"wnioskodawca": "Ewa", "data_wplywu": "2026-11-17"})
-    assert r.json()["wnioskodawca"] == "Ewa" and r.json()["termin"] == "2026-12-01"
-    assert r.json()["zdarzenia"][0]["data"] == "2026-11-17"
-    assert client.patch(f"/sprawy/{s['id']}", json={"znak": "x"}).status_code == 422
-
-
 # ---------- dokumenty ----------
 def test_odczyt_wniosku_docx():
     plik = docx_bytes("Wniosek o udostępnienie informacji publicznej", "Proszę o wykaz dotacji.")

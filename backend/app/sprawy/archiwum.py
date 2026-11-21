@@ -1,7 +1,7 @@
 """Archiwum: podobne sprawy, wyszukiwarka i baza wiedzy (ustawy, zarządzenia, archiwalne pisma).
 
 Wyszukiwanie pełnotekstowe SQLite FTS5 (tabele sprawy_fts, dokumenty_fts – app/storage.py)
-z prostym „stemmingiem” przez prefiksy słów (app/rag.fts_query). Dwa rankingi – po przedmiocie
+z prostym „stemmingiem” przez prefiksy słów (fts_query). Dwa rankingi – po przedmiocie
 sprawy i po treści dokumentów – łączone przez Reciprocal Rank Fusion. Działa lokalnie, bez modelu
 językowego. Przeszukiwane są wyłącznie zanonimizowane teksty (oryginały nie trafiają do bazy).
 """
@@ -12,12 +12,31 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 
-from app.rag import fts_query
 from app.sprawy import repo
 from app.sprawy.model import (
     RODZAJE_WIEDZY, PodobnaSprawa, TrafienieArchiwum, WiedzaDokument,
 )
 from app.storage import store
+
+PREFIX_LEN = 5  # długość prefiksu słowa w zapytaniu FTS (umowy / umów / umowa -> "umow*")
+
+STOPWORDS = {
+    "jest", "oraz", "albo", "jako", "przez", "przy", "który", "która", "które",
+    "tego", "tych", "jaki", "jaka", "jakie", "czy", "dla", "nie", "się", "lub",
+    "ale", "też", "tak", "jak", "aby", "żeby", "może", "mogę", "proszę", "było",
+}
+
+
+def fts_query(query: str) -> str | None:
+    words = re.findall(r"\w+", query.lower())
+    terms = []
+    for w in words:
+        if len(w) < 3 or w in STOPWORDS or w.isdigit() and len(w) < 4:
+            continue
+        t = w[:PREFIX_LEN]
+        if t not in terms:
+            terms.append(t)
+    return " OR ".join(f'"{t}"*' for t in terms) or None
 
 RRF_K = 60
 KANDYDACI = 100          # ile trafień z każdej tabeli przed fuzją

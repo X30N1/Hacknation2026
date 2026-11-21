@@ -13,7 +13,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - dane:/app/backend/data                       # baza SQLite i zanonimizowane dokumenty
+      - dane:/app/backend/data
       - ./backend/config.toml:/app/backend/config.toml:ro
     restart: unless-stopped
 

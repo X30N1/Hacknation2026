@@ -25,4 +25,5 @@ COPY --from=frontend /src/frontend/dist /app/frontend/dist
 
 EXPOSE 8000
 # Dane startowe są idempotentne: kalendarium xlsx (10 spraw), archiwum pism i podstaw prawnych UMB.
+# Do środowiska produkcyjnego należy usunąć "uv run --no-sync python -m app.seed --archiwum &&"!
 CMD ["sh", "-c", "uv run --no-sync python -m app.seed --archiwum && exec uv run --no-sync uvicorn serve:app --host 0.0.0.0 --port 8000"]

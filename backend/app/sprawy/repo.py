@@ -54,22 +54,6 @@ def utworz_sprawe(
     return sid
 
 
-def edytuj_sprawe(sid: int, zmiany: dict) -> None:
-    if not zmiany:
-        return
-    kolumny = {k: (_iso(v) if isinstance(v, date) else v) for k, v in zmiany.items()}
-    with store.lock, store.conn:
-        store.conn.execute(
-            f"UPDATE sprawy SET {', '.join(f'{k} = ?' for k in kolumny)} WHERE id = ?",
-            (*kolumny.values(), sid),
-        )
-        if "data_wplywu" in kolumny:
-            store.conn.execute(
-                "UPDATE zdarzenia SET data = ? WHERE sprawa_id = ? AND typ = 'REJESTRACJA'",
-                (kolumny["data_wplywu"], sid),
-            )
-
-
 def _wiersz(sid: int):
     return store.conn.execute("SELECT * FROM sprawy WHERE id = ?", (sid,)).fetchone()
 
@@ -168,7 +152,7 @@ def _dokument(r) -> Dokument:
     return Dokument(
         id=r["id"], sprawa_id=r["sprawa_id"], rodzaj=r["rodzaj"], nazwa_pliku=r["nazwa_pliku"],
         wydzial=r["wydzial"], metoda=r["metoda"], ocr_pewnosc=r["ocr_pewnosc"],
-        tekst=r["tekst"], url_podgladu=f"/dokumenty/{r['id']}/plik",
+        tekst=r["tekst"],
     )
 
 
@@ -194,11 +178,6 @@ def dokument(did: int) -> Dokument | None:
     return _dokument(r) if r else None
 
 
-def sciezka_dokumentu(did: int) -> Path | None:
-    r = store.conn.execute("SELECT sciezka FROM dokumenty WHERE id = ?", (did,)).fetchone()
-    return Path(r["sciezka"]) if r and r["sciezka"] else None
-
-
 def dokumenty_sprawy(sid: int) -> list[Dokument]:
     rows = store.conn.execute(
         "SELECT * FROM dokumenty WHERE sprawa_id = ? ORDER BY id", (sid,)
@@ -209,11 +188,3 @@ def dokumenty_sprawy(sid: int) -> list[Dokument]:
 def popraw_tekst(did: int, tekst: str) -> None:
     with store.lock, store.conn:
         store.conn.execute("UPDATE dokumenty SET tekst = ? WHERE id = ?", (tekst, did))
-
-
-def przypisz_dokument(did: int, sid: int) -> bool:
-    with store.lock, store.conn:
-        cur = store.conn.execute(
-            "UPDATE dokumenty SET sprawa_id = ? WHERE id = ? AND sprawa_id IS NULL", (sid, did)
-        )
-    return cur.rowcount == 1

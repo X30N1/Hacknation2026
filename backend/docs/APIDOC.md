@@ -1,8 +1,8 @@
 # API backendu
 
 - Frontend woła API z prefiksem `/api` (proxy Vite obcina go w trybie dev) – backend ścieżek bez prefiksu.
-- Daty w sprawach: `RRRR-MM-DD` (ISO). Znacznik czasu w `/llm/*`: `GG-MM:DD-MM-RRRR`.
-- Błędy: `{"blad": "komunikat po polsku", "detail": ...}` z kodem HTTP (404, 409, 413, 415, 422, 502).
+- Daty w sprawach: `RRRR-MM-DD` (ISO).
+- Błędy: `{"blad": "komunikat po polsku", "detail": ...}` z kodem HTTP (404, 409, 413, 415, 422).
 - Interaktywna dokumentacja: `http://localhost:8000/docs`.
 
 ## GET /health
@@ -67,7 +67,6 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
 - ocr_pewnosc: float | null (0–1, tylko OCR)
 - tekst: str
-- url_podgladu: str (ścieżka względem API, np. `/dokumenty/5/plik`; zapisany plik to wersja zanonimizowana)
 
 ## GET /sprawy
 Query (opcjonalnie): `rok` (int), `otwarte` (1/true – bez zamkniętych).
@@ -85,10 +84,6 @@ Body JSON:
 Treść wniosku zapisuje się osobno, po anonimizacji: `POST /sprawy/{id}/dokumenty` (rodzaj WNIOSEK).
 
 Zwraca 201 + Sprawa (szczegóły).
-
-## PATCH /sprawy/{id}
-Body JSON (dowolny podzbiór): wnioskodawca, przedmiot, inicjaly, data_wplywu.
-Zwraca Sprawa (szczegóły).
 
 ## POST /sprawy/{id}/zdarzenia
 Body JSON:
@@ -121,8 +116,8 @@ Oryginał wniosku lub innego dokumentu nie trafia do bazy ani na dysk. Przepływ
 3. Frontend zamazuje tekst i wysyła wynik jako plik `.txt` przez `POST /sprawy/{id}/dokumenty`.
    Przy rejestracji wniosku robi to po `POST /sprawy`.
 
-Zapisany dokument ma więc zawsze `metoda = "RECZNA"`, a `GET /dokumenty/{id}/plik` zwraca
-zanonimizowany `.txt`.
+Zapisany dokument ma więc zawsze `metoda = "RECZNA"`; `GET /dokumenty/{id}/docx` zwraca
+jego zanonimizowany tekst jako plik Word.
 
 ### Obiekt Odczyt
 - nazwa_pliku: str
@@ -153,9 +148,6 @@ Zwraca 201 + Dokument.
 ## PATCH /dokumenty/{id}
 Body JSON: `{ "tekst": str }` – ręczna poprawka tekstu (np. po niepewnym OCR). Ta sama blokada
 PESEL / dowodu co przy zapisie. Zwraca Dokument.
-
-## GET /dokumenty/{id}/plik
-Zapisany plik dokumentu (zanonimizowany `.txt`).
 
 ## GET /dokumenty/{id}/docx
 Tekst dokumentu jako plik Word (`Content-Disposition: attachment`).
@@ -188,8 +180,7 @@ Sprawy, dokumenty spraw i baza wiedzy: `[{ sprawa_id, znak, dokument_id, nazwa_p
 
 ## Baza wiedzy
 - `GET /wiedza` → `[{ id, rodzaj, nazwa_pliku, znaki, utworzono }]`
-- `GET /wiedza/rodzaje` → `{ USTAWA, ZARZADZENIE, WZOR, ARCHIWUM: etykieta }`
-- `POST /wiedza` multipart `plik`, `rodzaj` → 201 + Dokument (`sprawa_id = null`); blokada PESEL / dowodu
+- `POST /wiedza` multipart `plik`, `rodzaj` (USTAWA | ZARZADZENIE | WZOR | ARCHIWUM) → 201 + Dokument (`sprawa_id = null`); blokada PESEL / dowodu
 - `DELETE /wiedza/{id}` → 204 (np. stara wersja ustawy)
 
 ---
@@ -236,79 +227,7 @@ dokumentu – patrz „Zapis dokumentów – tylko po anonimizacji”.
 - `uwagi` – ostrzeżenia dla urzędnika, np. „model niedostępny – tylko wzorce” albo
   „dokument za długi – model sprawdził pierwsze N znaków”.
 
-## GET /dokumenty/{id}/anonimizacja
-Nie jest już używany przez frontend, bo dokumenty zapisują się po anonimizacji.
-Propozycje dla zapisanego dokumentu, z wnioskodawcą sprawy, do której dokument należy.
-Query: `llm` (bool, domyślnie `true`), `false` oznacza tylko wzorce.
-Zwraca obiekt Propozycje. Błąd 404 oznacza brak dokumentu.
-
 ## POST /anonimizacja
-Propozycje dla dowolnego tekstu, np. kontekstu OCR przed wysłaniem do asystenta albo
-projektu pisma.
+Propozycje dla dowolnego tekstu, np. treści wniosku przed zapisem albo projektu pisma.
 Body JSON: `{ "tekst": str, "wnioskodawca": str | null, "llm": bool = true }`.
 Zwraca obiekt Propozycje. Błąd 422 oznacza błędne body.
-
----
-
-# Asystent LLM
-
-Wiadomości w wątku numerowane są kolejno, łącznie dla obu stron rozmowy:
-`message_id` = 1 (pytanie urzędnika), 2 (odpowiedź LLM), 3 (kolejne pytanie), …
-Pole `msg_owner` mówi, kto napisał wiadomość: `"user"` (urzędnik) albo `"assistant"` (LLM).
-
-## POST /llm/request
-
-Czego się spodziewa (JSON):
- - thread_id: int (id wątku; -1 = nowy wątek, którego id wraca w odpowiedzi)
- - prompt: str (prośba bazowa użytkownika)
- - context: arr[str] (opcjonalnie; teksty dokumentów po OCR – dołączane do pytania dla LLM,
-   zapisywane osobno od promptu)
-
-Co zwraca:
- - thread_id: int (id wątku wiadomości)
- - message_id: int (numer kolejny tej wiadomości w wątku – dla odpowiedzi LLM zawsze parzysty)
- - msg_owner: str (zawsze "assistant")
- - content: str (odpowiedź od LLM)
- - timestamp: str (GG-MM:DD-MM-RRRR)
- - sources: ARRAY (fragmenty wcześniejszych rozmów użyte przez RAG, może być puste)
-   - thread_id: int
-   - message_id: int (numer wiadomości w wątku źródłowym)
-   - msg_owner: str ("user" | "assistant" – kto napisał fragment)
-   - title: str (tytuł wątku źródłowego)
-   - snippet: str (fragment tekstu)
-   - score: float (trafność)
-
-Błędy: 404 – wątek nie istnieje, 422 – niepoprawne dane, 502 – błąd LLM.
-
-## GET /llm/all
-
-Co oczekuje:
-nic
-Co zwraca:
-ARRAY
-- id: int (id wątku)
-- title: str (nazwa wątku generowana przez LLM z pierwszego pytania i odpowiedzi)
-- create_date: str (GG-MM:DD-MM-RRRR, data pierwszej wiadomości wątku)
-
-## GET /llm/health
-
-Czego oczekuje:
-nic
-Co zwraca (HTTP 200 gdy OK / tryb echo, HTTP 503 gdy model niedostępny):
-- status: str ("ok" | "echo" | "error")
-- model: str (nazwa modelu)
-- base_url: str (adres API LLM)
-- latency_ms: int | null (czas odpowiedzi API modelu)
-- detail: str | null (opis błędu)
-
-## GET /llm/{thread_id}
-
-Czego oczekuje:
-ID wątku (404 gdy nie istnieje)
-
-Co oddaje:
-ARRAY – wszystkie wiadomości wątku (obie strony), w kolejności `message_id`
-- message_id: int (numer kolejny wiadomości w wątku: 1, 2, 3, …)
-- msg_owner: str ("user" – urzędnik | "assistant" – LLM)
-- content: str (user: prompt urzędnika bez dołączonego kontekstu OCR; assistant: odpowiedź LLM)
-- timestamp: str (GG-MM:DD-MM-RRRR)

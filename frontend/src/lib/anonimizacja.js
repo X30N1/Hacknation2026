@@ -1,5 +1,5 @@
 // Wykrywanie danych do zamazania (lista „Dane podlegające anonimizacji”) – tylko PROPOZYCJE,
-// o zamazaniu decyduje urzędnik. Główne źródło: backend (GET /dokumenty/{id}/anonimizacja – wzorce,
+// o zamazaniu decyduje urzędnik. Główne źródło: backend (POST /anonimizacja – wzorce,
 // wnioskodawca ze sprawy, model językowy); te wzorce to zapas, gdy serwer nie odpowiada.
 // Nie wykryje imion i nazwisk bez kontekstu ani danych wrażliwych (zdrowie itp.) – te urzędnik zaznacza ręcznie.
 

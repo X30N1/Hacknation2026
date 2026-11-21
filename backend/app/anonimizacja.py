@@ -44,10 +44,6 @@ KATEGORIE = {
 Kategoria = Literal[tuple(KATEGORIE)]  # type: ignore[valid-type]
 Zrodlo = Literal["WZORZEC", "SPRAWA", "LLM"]
 
-LLM_FRAGMENT_MAX = 6000  # TODO: limit – znaki tekstu w jednym zapytaniu do LLM
-LLM_FRAGMENTY_MAX = 10   # TODO: limit – maks. zapytań do LLM na dokument (dalej tylko wzorce)
-
-
 class Fragment(BaseModel):
     start: int
     end: int
@@ -182,12 +178,14 @@ Tekst:
 
 def _czesci(tekst: str) -> list[tuple[int, str]]:
     """Podział na fragmenty dla LLM – na granicy akapitu / wiersza, z przesunięciem."""
+    limity = settings.llm.limity
+    rozmiar, ile = limity.anonimizacja_fragment, limity.anonimizacja_fragmenty
     out, poz = [], 0
-    while poz < len(tekst) and len(out) < LLM_FRAGMENTY_MAX:
-        koniec = min(poz + LLM_FRAGMENT_MAX, len(tekst))
+    while poz < len(tekst) and len(out) < ile:
+        koniec = min(poz + rozmiar, len(tekst))
         if koniec < len(tekst):
             ciecie = max(tekst.rfind("\n\n", poz, koniec), tekst.rfind("\n", poz, koniec))
-            if ciecie > poz + LLM_FRAGMENT_MAX // 2:
+            if ciecie > poz + rozmiar // 2:
                 koniec = ciecie
         out.append((poz, tekst[poz:koniec]))
         poz = koniec
@@ -197,7 +195,7 @@ def _czesci(tekst: str) -> list[tuple[int, str]]:
 async def _llm_czesc(przesuniecie: int, czesc: str) -> list[_Traf]:
     odp = await llm_client.complete(
         [{"role": "user", "content": PROMPT.replace("{tekst}", czesc)}],
-        temperature=0,
+        temperature=settings.llm.temperatury.anonimizacja,
         response_format={"type": "json_object"},
     )
     m = re.search(r"\{.*\}", odp, re.S)
@@ -222,9 +220,10 @@ async def _llm_czesc(przesuniecie: int, czesc: str) -> list[_Traf]:
 async def _llm(tekst: str) -> tuple[list[_Traf], list[str]]:
     czesci = _czesci(tekst)
     uwagi = []
-    if sum(len(c) for _, c in czesci) < len(tekst):
+    sprawdzone = sum(len(c) for _, c in czesci)
+    if sprawdzone < len(tekst):
         uwagi.append(f"Dokument jest długi – model sprawdził pierwsze "
-                     f"{LLM_FRAGMENT_MAX * LLM_FRAGMENTY_MAX} znaków, dalej tylko wzorce.")
+                     f"{sprawdzone} znaków, dalej tylko wzorce.")
     wyniki = await asyncio.gather(*(_llm_czesc(p, c) for p, c in czesci), return_exceptions=True)
     out = []
     for w in wyniki:

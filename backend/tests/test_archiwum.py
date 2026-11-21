@@ -113,3 +113,11 @@ def test_import_archiwum_umb(monkeypatch):
     assert all(d["nazwa_pliku"].endswith(".txt") for d in docs)
     assert any(w["rodzaj"] == "USTAWA" for w in client.get("/wiedza").json())
     assert client.get("/archiwum/szukaj", params={"q": "zwierząt"}).json()
+
+
+def test_fts_query_stems_and_drops_stopwords():
+    from app.sprawy.archiwum import fts_query
+
+    assert fts_query("czy jest umowa?") == '"umowa"*'
+    assert fts_query("oświetlenia ulicznego") == '"oświe"* OR "ulicz"*'
+    assert fts_query("a i o") is None

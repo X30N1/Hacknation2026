@@ -9,6 +9,25 @@ model = "deepseek-chat"
 # limit czasu zapytania do LLM w sekundach
 timeout = 120
 
+[llm.limity]
+# Ile tekstu (w znakach) trafia do modelu. Większe wartości = więcej kontekstu, ale wolniej
+# i drożej; lokalny model może mieć mniejsze okno kontekstu.
+przedmiot_max = 160            # propozycja „przedmiotu” w formularzu wniosku
+wniosek_analiza = 6000         # wniosek -> wnioskodawca i przedmiot
+wniosek_wydzialy = 4000        # wniosek -> sugerowane wydziały
+anonimizacja_fragment = 6000   # tekst w jednym zapytaniu anonimizacji
+anonimizacja_fragmenty = 10    # maks. zapytań na dokument (dalej tylko wzorce)
+projekt_material = 6000        # jeden materiał (wniosek, odpowiedź wydziału) w projekcie odpowiedzi
+projekt_wzor = 2500            # odpowiedź archiwalna użyta jako wzór stylu
+uzasadnienie_max = 300         # uzasadnienie sugerowanego wydziału (odpowiedź modelu)
+
+[llm.temperatury]
+# 0 = odpowiedzi powtarzalne (ekstrakcja, JSON); wyżej = swobodniejszy styl tekstu (maks. 2).
+analiza = 0          # wnioskodawca i przedmiot z wniosku
+wydzialy = 0         # sugerowane wydziały
+anonimizacja = 0     # dane do zamazania
+projekt = 0.2        # projekt odpowiedzi
+
 [database]
 # SQLite; ścieżka względna liczona od katalogu backend/
 path = "data/app.db"
@@ -26,24 +45,6 @@ dpi = 300
 max_stron = 20
 # PDF z mniejszą liczbą znaków w warstwie tekstowej jest traktowany jak skan
 min_znakow_warstwy = 50
-
-[rag]
-# "tool" - model sam przeszukuje wcześniejsze rozmowy (function calling)
-# "auto" - wyniki wyszukiwania doklejane do każdego zapytania (modele bez function calling)
-# "off"  - wyłączone
-mode = "tool"
-top_k = 5
-chunk_size = 1200
-chunk_overlap = 200
-max_tool_rounds = 3
-
-[rag.embeddings]
-# Puste base_url = tylko wyszukiwanie pełnotekstowe (bez wektorów).
-# DeepSeek nie udostępnia embeddingów - np. Ollama: "http://localhost:11434/v1"
-base_url = ""
-api_key = ""
-model = "nomic-embed-text"
-timeout = 30
 
 [anonimizacja]
 # Propozycje danych do zamazania: wzorce (PESEL, NIP, e-mail…) zawsze, a przy llm = true

@@ -50,11 +50,6 @@ async def lista_wiedzy():
     return archiwum.lista_wiedzy()
 
 
-@router.get("/wiedza/rodzaje")
-async def rodzaje_wiedzy() -> dict[str, str]:
-    return RODZAJE_WIEDZY
-
-
 @router.post("/wiedza", response_model=Dokument, status_code=status.HTTP_201_CREATED)
 async def dodaj_wiedze(plik: UploadFile = File(...), rodzaj: str = Form(...)):
     """Ustawa, zarządzenie, wzór pisma albo archiwalne pismo – materiał dla wyszukiwarki

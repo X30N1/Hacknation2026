@@ -4,14 +4,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
 
 from app import anonimizacja
 from app.config import settings
 from app.sprawy import analiza, ekstrakcja, repo, terminy
 from app.sprawy.model import (
-    Dokument, DokumentPopraw, Odczyt, OdczytWniosku, SprawaEdytuj, SprawaLista, SprawaSzczegoly,
-    SprawaUtworz, TypZdarzenia, Zrodlo, ZdarzenieDodaj,
+    Dokument, DokumentPopraw, Odczyt, OdczytWniosku, SprawaLista, SprawaSzczegoly, SprawaUtworz,
+    TypZdarzenia, Zrodlo, ZdarzenieDodaj,
 )
 
 router = APIRouter(tags=["sprawy"])
@@ -73,21 +72,6 @@ async def utworz(body: SprawaUtworz, d: Dzis):
         raise HTTPException(422, "Data wpływu nie może być z przyszłości.")
     sid = repo.utworz_sprawe(body.znak, body.data_wplywu, body.wnioskodawca, body.przedmiot,
                              body.inicjaly)
-    return _sprawa(sid, d)
-
-
-@router.patch("/sprawy/{sid}", response_model=SprawaSzczegoly)
-async def edytuj(sid: int, body: SprawaEdytuj, d: Dzis):
-    _sprawa(sid, d)
-    zmiany = body.model_dump(exclude_unset=True)
-    if zmiany.get("data_wplywu") and zmiany["data_wplywu"] > d:
-        raise HTTPException(422, "Data wpływu nie może być z przyszłości.")
-    if "inicjaly" in zmiany:
-        zmiany["inicjaly"] = zmiany["inicjaly"] or None
-    for k in ("wnioskodawca", "przedmiot", "data_wplywu"):
-        if k in zmiany and zmiany[k] is None:
-            raise HTTPException(422, f"Pole „{k}” nie może być puste.")
-    repo.edytuj_sprawe(sid, zmiany)
     return _sprawa(sid, d)
 
 
@@ -183,11 +167,3 @@ async def popraw_tekst(did: int, body: DokumentPopraw):
     repo.popraw_tekst(did, body.tekst)
     return repo.dokument(did)
 
-
-@router.get("/dokumenty/{did}/plik", response_class=FileResponse)
-async def plik_dokumentu(did: int):
-    doc = repo.dokument(did)
-    sciezka = repo.sciezka_dokumentu(did)
-    if doc is None or sciezka is None or not sciezka.exists():
-        raise HTTPException(404, "Nie znaleziono pliku.")
-    return FileResponse(sciezka, filename=doc.nazwa_pliku)
