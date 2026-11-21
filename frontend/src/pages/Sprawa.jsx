@@ -313,17 +313,6 @@ export default function Sprawa() {
           wnioskodawca={s.wnioskodawca} onZapisz={zapiszNowy} onAnuluj={() => setNowy(null)} />
       )}
 
-      <div className="grid-2">
-        <div className="card">
-          <h2>Podobne sprawy z archiwum</h2>
-          <p className="muted">W przygotowaniu – wyszukiwanie po treści wniosku.</p>
-        </div>
-        <div className="card">
-          <h2>Sugerowane wydziały</h2>
-          <p className="muted">W przygotowaniu – propozycje z uzasadnieniem.</p>
-        </div>
-      </div>
-
       <div className="card">
         <div className="doc-head">
           <h2>Dokumenty</h2>

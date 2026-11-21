@@ -1,9 +1,7 @@
-// Klient API zgodny z docs/API.md. Przy VITE_API_MOCK=1 zapytania obsługuje src/api/mock.js.
+// Klient API zgodny z backend/docs/APIDOC.md (w dev: proxy Vite /api → localhost:8000).
 import { ApiError } from './errors'
-import { handle as mockHandle } from './mock'
 
 export { ApiError }
-export const USE_MOCK = import.meta.env.VITE_API_MOCK === '1'
 
 function qs(params = {}) {
   const p = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
@@ -11,8 +9,6 @@ function qs(params = {}) {
 }
 
 async function http(method, path, body) {
-  if (USE_MOCK) return mockHandle(method, path, body)
-
   const opts = { method, headers: {} }
   if (body instanceof FormData) opts.body = body
   else if (body !== undefined) {

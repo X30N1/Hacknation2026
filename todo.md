@@ -69,13 +69,12 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 - [ ] Prefiks `/api`: w dev obcina go proxy Vite; przy serwowaniu `dist/` z FastAPI (Docker) – zamontować routery pod `/api` albo reverse proxy
 - [ ] `url_podgladu` jest względny wobec API (`/dokumenty/{id}/plik`) – frontend musi dodać `/api`
 - [ ] Format znacznika czasu w `/llm/*` (`GG-MM:DD-MM-RRRR`) vs ISO w sprawach – ujednolicić
-- [ ] Logika terminów jest zduplikowana w `frontend/src/api/mock.js` – przy zmianach reguł aktualizować oba miejsca lub usunąć mock
 - [ ] Słownik rodzajów dokumentów (`WNIOSEK`, `ODP_WYDZIALU`, …) i wydziałów – wspólny dla frontu i backendu
 
 ## Sprawy i dokumenty
 
 - [ ] OCR: zainstalować pakiet językowy (Arch: `tesseract-data-pol`), bez niego skany zwracają pusty tekst
-- [ ] Uwagi z importu wymagające treści pism (w mocku: `ZNAK_W_TRESCI_INNY`, `DATA_WPLYWU_PIECZEC`, `PRZEDMIOT_NIEZGODNY`, `DATA_PISMA_INNA`) – porównanie xlsx z PDF-ami z archiwum
+- [ ] Uwagi z importu wymagające treści pism (np. `ZNAK_W_TRESCI_INNY`, `DATA_WPLYWU_PIECZEC`, `PRZEDMIOT_NIEZGODNY`, `DATA_PISMA_INNA`) – porównanie xlsx z PDF-ami z archiwum
 - [ ] Termin w weekend / święto – ustalić zasadę (art. 57 § 4 KPA) i czy przesuwać termin automatycznie
 - [ ] Import archiwalnych pism (PDF) do istniejących spraw
 - [ ] Usuwanie / cofanie zdarzeń (pomyłka urzędnika) z zachowaniem historii
