@@ -243,3 +243,27 @@ mark { background: var(--yellow-bg); color: var(--text); padding: 0 1px; border-
   .month-day { min-height: 64px; }
   .month-chip { font-size: 0.65rem; }
 }
+
+/* ---------- logowanie i konta ---------- */
+.auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.auth-card { width: 100%; max-width: 440px; padding: 24px; }
+.auth-card h1 { font-size: 1.3rem; margin: 16px 0 8px; }
+.auth-brand { margin-bottom: 4px; }
+.auth-stopka { margin: 16px 0 0; font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; }
+.btn-pelny { width: 100%; justify-content: center; margin-top: 4px; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: var(--danger-bg); }
+.link { background: none; border: none; padding: 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; }
+.lub { text-align: center; color: var(--muted); margin: 10px 0; }
+.przelacznik { display: flex; gap: 8px; margin: 8px 0 12px; flex-wrap: wrap; }
+.kroki { padding-left: 20px; margin: 4px 0 8px; }
+.qr { display: flex; justify-content: center; background: #fff; padding: 8px; border-radius: 8px; margin: 8px 0; }
+.qr svg { width: 210px; height: 210px; }
+.sekret { display: block; margin-top: 6px; font-size: 0.95rem; letter-spacing: 0.05em; word-break: break-all; user-select: all; }
+.user-menu { display: flex; align-items: center; gap: 8px; }
+.user-link { font-weight: 600; color: var(--text); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
+.user-link:hover, .user-link.active { background: var(--info-bg); color: var(--primary); }
+.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
+.lista-kluczy { list-style: none; padding: 0; margin: 4px 0 10px; }
+.lista-kluczy li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.lista-kluczy li .btn { margin-left: auto; }

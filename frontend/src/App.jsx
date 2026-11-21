@@ -3,8 +3,11 @@ import { Link, NavLink, Route, Routes } from 'react-router-dom'
 import { api } from './api/client'
 import Archiwum from './pages/Archiwum'
 import Kalendarz from './pages/Kalendarz'
+import Konto from './pages/Konto'
+import Logowanie from './pages/Logowanie'
 import NowyWniosek from './pages/NowyWniosek'
 import Sprawa from './pages/Sprawa'
+import Uzytkownicy from './pages/Uzytkownicy'
 
 const NAV = [
   { to: '/', label: 'Kalendarz', end: true },
@@ -34,10 +37,26 @@ function LlmStatus({ health }) {
 
 export default function App() {
   const [health, setHealth] = useState(null)
+  // undefined = sprawdzam sesję, null = niezalogowany, obiekt = /auth/ja
+  const [ja, setJa] = useState(undefined)
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null))
+    api.ja().then(setJa).catch(() => setJa(null))
+    const wygasla = () => setJa(null)
+    window.addEventListener('sesja-wygasla', wygasla)
+    return () => window.removeEventListener('sesja-wygasla', wygasla)
   }, [])
+
+  async function wyloguj() {
+    await api.wyloguj().catch(() => {})
+    setJa(null)
+  }
+
+  if (ja === undefined) return <div className="auth-wrap"><span className="spinner" aria-label="Ładowanie" /></div>
+  if (ja === null || ja.stan !== 'OK') return <Logowanie ja={ja} onZmiana={setJa} />
+
+  const nav = ja.rola === 'admin' ? [...NAV, { to: '/uzytkownicy', label: 'Użytkownicy' }] : NAV
 
   return (
     <div className="app">
@@ -55,13 +74,19 @@ export default function App() {
           </div>
         </div>
         <nav className="nav" aria-label="Główna nawigacja">
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>
               {n.label}
             </NavLink>
           ))}
         </nav>
         <LlmStatus health={health} />
+        <div className="user-menu">
+          <NavLink to="/konto" className={({ isActive }) => `user-link ${isActive ? 'active' : ''}`} title="Moje konto">
+            {ja.login}
+          </NavLink>
+          <button type="button" className="btn btn-small" onClick={wyloguj}>Wyloguj</button>
+        </div>
       </header>
 
       <main className="content">
@@ -70,6 +95,8 @@ export default function App() {
           <Route path="/nowy" element={<NowyWniosek />} />
           <Route path="/sprawy/:id" element={<Sprawa />} />
           <Route path="/archiwum" element={<Archiwum />} />
+          <Route path="/konto" element={<Konto ja={ja} onZmiana={setJa} />} />
+          {ja.rola === 'admin' && <Route path="/uzytkownicy" element={<Uzytkownicy ja={ja} />} />}
           <Route path="*" element={<NieZnaleziono />} />
         </Routes>
       </main>

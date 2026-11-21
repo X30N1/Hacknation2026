@@ -66,3 +66,19 @@ min_znakow_warstwy = 50
 # także model z [llm] (imiona i nazwiska, dane wrażliwe). Tekst dokumentu trafia do modelu –
 # na produkcji tylko model lokalny.
 llm = true
+
+[auth]
+# Przy pierwszym uruchomieniu powstaje konto admin / admin – hasło trzeba zmienić przy pierwszym logowaniu.
+# Drugi składnik (aplikacja TOTP albo klucz sprzętowy FIDO2/WebAuthn) obowiązkowy dla wszystkich.
+wymagaj_2fa = true
+sesja_godziny = 10            # sesja po pełnym zalogowaniu
+sesja_wstepna_minuty = 15     # czas na zmianę hasła / drugi składnik po podaniu hasła
+min_dlugosc_hasla = 10
+max_prob = 5                  # nieudane próby (hasło lub kod) przed blokadą konta
+blokada_minut = 15
+# true za reverse proxy z HTTPS (ciasteczko sesji tylko przez TLS)
+cookie_secure = false
+# Klucze sprzętowe: rp_id = domena, pod którą otwierana jest aplikacja (bez portu), origins = pełne
+# adresy. Przeglądarki pozwalają na klucze tylko przez HTTPS albo na localhost.
+rp_id = "localhost"
+origins = ["http://localhost:8000", "http://localhost:5173"]

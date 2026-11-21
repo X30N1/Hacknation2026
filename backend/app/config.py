@@ -97,12 +97,30 @@ class AnonimizacjaSettings(BaseModel):
     llm: bool = True
 
 
+class AuthSettings(BaseModel):
+    # Drugi składnik (aplikacja TOTP albo klucz sprzętowy FIDO2/WebAuthn) obowiązkowy dla wszystkich.
+    wymagaj_2fa: bool = True
+    sesja_godziny: float = Field(10, gt=0)          # sesja po pełnym zalogowaniu
+    sesja_wstepna_minuty: float = Field(15, gt=0)   # na zmianę hasła / drugi składnik po haśle
+    min_dlugosc_hasla: int = Field(10, ge=8)
+    max_prob: int = Field(5, ge=1)                  # nieudane logowania przed blokadą konta
+    blokada_minut: float = Field(15, gt=0)
+    # Ciasteczko tylko przez HTTPS – włącz za reverse proxy z TLS.
+    cookie_secure: bool = False
+    # WebAuthn: rp_id = domena, pod którą użytkownicy otwierają aplikację (bez portu i schematu);
+    # origins = pełne adresy (schemat + host + port). Klucze działają tylko na HTTPS lub localhost.
+    rp_id: str = "localhost"
+    rp_nazwa: str = "Asystent urzędnika – UM Bydgoszcz"
+    origins: list[str] = ["http://localhost:8000", "http://localhost:5173"]
+
+
 class Settings(BaseModel):
     llm: LLMSettings = LLMSettings()
     database: DatabaseSettings = DatabaseSettings()
     pliki: PlikiSettings = PlikiSettings()
     ocr: OCRSettings = OCRSettings()
     anonimizacja: AnonimizacjaSettings = AnonimizacjaSettings()
+    auth: AuthSettings = AuthSettings()
 
 
 ENV_PREFIX = "APP_"

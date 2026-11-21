@@ -26,6 +26,36 @@ CREATE TABLE IF NOT EXISTS zdarzenia (
     payload     TEXT NOT NULL DEFAULT '{}',  -- JSON
     inicjaly    TEXT
 );
+CREATE TABLE IF NOT EXISTS uzytkownicy (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    login              TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    haslo_hash         TEXT NOT NULL,
+    rola               TEXT NOT NULL DEFAULT 'urzednik',  -- admin | urzednik
+    musi_zmienic_haslo INTEGER NOT NULL DEFAULT 1,
+    totp_sekret        TEXT,                    -- aktywny sekret TOTP
+    totp_nowy          TEXT,                    -- sekret w trakcie konfiguracji (do potwierdzenia kodem)
+    totp_ostatni_krok  INTEGER,                 -- ochrona przed ponownym użyciem kodu
+    nieudane_proby     INTEGER NOT NULL DEFAULT 0,
+    zablokowany_do     TEXT,
+    utworzono          TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS klucze (            -- klucze sprzętowe / passkeys (WebAuthn)
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    uzytkownik_id  INTEGER NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+    credential_id  BLOB NOT NULL UNIQUE,
+    klucz_publiczny BLOB NOT NULL,
+    licznik        INTEGER NOT NULL DEFAULT 0,
+    nazwa          TEXT NOT NULL,
+    utworzono      TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sesje (
+    token_hash     TEXT PRIMARY KEY,            -- SHA-256 tokenu z ciasteczka
+    uzytkownik_id  INTEGER NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+    drugi_skladnik INTEGER NOT NULL DEFAULT 0,  -- 1 = TOTP / klucz potwierdzony w tej sesji
+    wyzwanie       BLOB,                        -- WebAuthn: challenge bieżącej operacji
+    utworzono      TEXT NOT NULL,
+    wygasa         TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS dokumenty (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     sprawa_id   INTEGER REFERENCES sprawy(id) ON DELETE SET NULL,  -- NULL do zatwierdzenia sprawy

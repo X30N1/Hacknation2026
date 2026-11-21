@@ -23,6 +23,14 @@ OCR skanów lokalnie: zainstaluj Ollamę i `ollama pull glm-ocr` (backend łącz
 Zamiast Ollamy można użyć vLLM / SGLang: `[ocr] api = "openai"`, `base_url = "http://<serwer>:8080/v1"`.
 Bez serwera OCR skany wracają z pustym tekstem do wpisania ręcznie.
 
+# Logowanie
+Przy pierwszym uruchomieniu powstaje konto **admin / admin**. Przy pierwszym logowaniu trzeba ustawić
+własne hasło i drugi składnik: aplikację TOTP (Google/Microsoft Authenticator, Aegis…) albo klucz
+sprzętowy FIDO2 (YubiKey itp.). Administrator w zakładce „Użytkownicy” dodaje i usuwa konta, ustawia
+hasła tymczasowe (odblokowuje konto) i resetuje drugi składnik. Ustawienia: `[auth]` w `config.toml`.
+Klucze sprzętowe działają tylko przez HTTPS albo na `localhost` – przy innym adresie ustaw `rp_id`
+i `origins`, a za reverse proxy z TLS `cookie_secure = true`.
+
 # Model językowy – działanie bez internetu
 Aplikacja działa w pełni **bez modelu językowego**: OCR (GLM-OCR), kalendarz, wyszukiwanie w archiwum (SQLite FTS5),
 wydziały z archiwum i słów kluczowych, projekt pisma z szablonu, anonimizacja wzorcami.

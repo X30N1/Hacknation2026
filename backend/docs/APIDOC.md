@@ -2,8 +2,49 @@
 
 - Frontend woła API z prefiksem `/api` (proxy Vite obcina go w trybie dev) – backend ścieżek bez prefiksu.
 - Daty w sprawach: `RRRR-MM-DD` (ISO).
-- Błędy: `{"blad": "komunikat po polsku", "detail": ...}` z kodem HTTP (404, 409, 413, 415, 422).
+- Błędy: `{"blad": "komunikat po polsku", "detail": ...}` z kodem HTTP (401, 403, 404, 409, 413, 415, 422, 429).
 - Interaktywna dokumentacja: `http://localhost:8000/docs`.
+- Wszystkie endpointy poza `/health` i `/auth/*` wymagają pełnego zalogowania (ciasteczko `sesja`,
+  HttpOnly, SameSite=Strict). Brak sesji lub niedokończone logowanie: 401.
+
+---
+
+# Logowanie
+
+Pierwsze uruchomienie tworzy konto **admin / admin** z obowiązkową zmianą hasła.
+Po haśle logowanie przechodzi przez etapy (`stan` w odpowiedzi):
+
+| stan | co dalej |
+|---|---|
+| `DRUGI_SKLADNIK` | `POST /auth/totp/weryfikuj` albo klucz (`/auth/klucz/logowanie/*`) – przed zmianą hasła, żeby samo hasło nie wystarczyło do przejęcia konta |
+| `ZMIEN_HASLO` | `POST /auth/haslo` – pierwsze logowanie lub hasło tymczasowe od administratora |
+| `KONFIGURUJ_2FA` | `POST /auth/totp/nowy` + `/auth/totp/potwierdz` albo `/auth/klucz/rejestracja/*` (gdy `[auth] wymagaj_2fa`) |
+| `OK` | pełny dostęp; sesja na `sesja_godziny` (wcześniej `sesja_wstepna_minuty`) |
+
+Obiekt **Ja**: `{ login, rola: "admin" | "urzednik", stan, totp: bool, klucze: int, wymagaj_2fa, min_dlugosc_hasla }`.
+
+- `POST /auth/login` `{ login, haslo }` → Ja + ciasteczko. 401 zły login/hasło (ten sam komunikat),
+  429 konto zablokowane po `max_prob` nieudanych próbach (hasło lub kod TOTP) na `blokada_minut`.
+- `GET /auth/ja` → Ja (401 bez sesji). `POST /auth/wyloguj` → 204.
+- `POST /auth/haslo` `{ stare, nowe }` → Ja. Wylogowuje pozostałe sesje użytkownika.
+- `POST /auth/totp/nowy` → `{ sekret, uri, qr_svg }` (sekret aktywny dopiero po potwierdzeniu).
+- `POST /auth/totp/potwierdz` / `POST /auth/totp/weryfikuj` `{ kod }` → Ja. Kod jednorazowy (powtórzenie odrzucane).
+- `DELETE /auth/totp` → Ja (409, gdy to jedyny drugi składnik).
+- Klucze WebAuthn (JSON zgodny z `PublicKeyCredential` w base64url):
+  `POST /auth/klucz/rejestracja/opcje` → opcje `navigator.credentials.create`;
+  `POST /auth/klucz/rejestracja` `{ credential, nazwa }` → Ja;
+  `POST /auth/klucz/logowanie/opcje` → opcje `navigator.credentials.get`;
+  `POST /auth/klucz/logowanie` `{ credential }` → Ja;
+  `GET /auth/klucze` → `[{ id, nazwa, utworzono }]`; `DELETE /auth/klucze/{id}` → Ja.
+
+## Użytkownicy (tylko administrator, inaczej 403)
+Obiekt: `{ id, login, rola, musi_zmienic_haslo, totp, klucze, zablokowany_do, utworzono }`.
+- `GET /uzytkownicy`
+- `POST /uzytkownicy` `{ login, haslo, rola }` → 201 (hasło tymczasowe, zmiana przy pierwszym logowaniu;
+  login: 3–40 znaków `a-z 0-9 . _ -`, zapisywany małymi literami; 409 gdy istnieje)
+- `DELETE /uzytkownicy/{id}` → 204 (409: własne konto albo ostatni administrator)
+- `POST /uzytkownicy/{id}/haslo` `{ haslo }` → hasło tymczasowe, odblokowanie konta, wylogowanie użytkownika
+- `POST /uzytkownicy/{id}/reset-2fa` → usuwa TOTP i klucze (zgubiony telefon / klucz), wylogowanie użytkownika
 
 ## GET /health
 

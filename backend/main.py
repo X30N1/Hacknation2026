@@ -1,20 +1,24 @@
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from app import llm_client
 from app.config import settings
-from app.routers import anonimizacja, archiwum, sprawy
+from app.auth import repo as konta
+from app.auth.sesja import zalogowany
+from app.routers import anonimizacja, archiwum, auth, sprawy, uzytkownicy
 from app.storage import store
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     store.connect(settings.database.resolved())
+    if konta.zapewnij_admina():
+        print("Utworzono konto administratora: admin / admin – zmień hasło przy pierwszym logowaniu.")
     yield
     store.close()
 
@@ -26,9 +30,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.include_router(sprawy.router)
-app.include_router(anonimizacja.router)
-app.include_router(archiwum.router)
+# Logowanie i zarządzanie kontami; cała reszta API tylko po pełnym zalogowaniu (hasło + 2FA).
+app.include_router(auth.router)
+app.include_router(uzytkownicy.router)
+_chronione = [Depends(zalogowany)]
+app.include_router(sprawy.router, dependencies=_chronione)
+app.include_router(anonimizacja.router, dependencies=_chronione)
+app.include_router(archiwum.router, dependencies=_chronione)
 
 
 # Błędy w formacie frontendu: {"blad": "komunikat"} (+ "detail" dla zgodności z FastAPI).

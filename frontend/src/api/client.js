@@ -20,6 +20,8 @@ async function http(method, path, body) {
   } catch {
     throw new ApiError('Brak połączenia z serwerem aplikacji. Sprawdź, czy backend jest uruchomiony.', 0)
   }
+  // Sesja wygasła / wylogowano na innym urządzeniu -> App pokazuje ekran logowania.
+  if (res.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('sesja-wygasla'))
   if (!res.ok) {
     let msg = `Błąd serwera (${res.status})`
     try {
@@ -34,6 +36,7 @@ async function http(method, path, body) {
     }
     throw new ApiError(msg, res.status)
   }
+  if (res.status === 204) return null
   const ct = res.headers.get('content-type') || ''
   return ct.includes('application/json') ? res.json() : res.blob()
 }
@@ -46,6 +49,29 @@ function form(fields) {
 
 export const api = {
   health: () => http('GET', '/health'),
+
+  // logowanie: hasło -> (drugi składnik) -> (zmiana hasła) -> (konfiguracja 2FA) -> OK
+  ja: () => http('GET', '/auth/ja'),
+  zaloguj: (login, haslo) => http('POST', '/auth/login', { login, haslo }),
+  wyloguj: () => http('POST', '/auth/wyloguj'),
+  zmienHaslo: (stare, nowe) => http('POST', '/auth/haslo', { stare, nowe }),
+  totpNowy: () => http('POST', '/auth/totp/nowy'),
+  totpPotwierdz: (kod) => http('POST', '/auth/totp/potwierdz', { kod }),
+  totpWeryfikuj: (kod) => http('POST', '/auth/totp/weryfikuj', { kod }),
+  totpWylacz: () => http('DELETE', '/auth/totp'),
+  kluczRejestracjaOpcje: () => http('POST', '/auth/klucz/rejestracja/opcje'),
+  kluczRejestracja: (credential, nazwa) => http('POST', '/auth/klucz/rejestracja', { credential, nazwa }),
+  kluczLogowanieOpcje: () => http('POST', '/auth/klucz/logowanie/opcje'),
+  kluczLogowanie: (credential) => http('POST', '/auth/klucz/logowanie', { credential }),
+  klucze: () => http('GET', '/auth/klucze'),
+  usunKlucz: (id) => http('DELETE', `/auth/klucze/${id}`),
+
+  // administrator
+  uzytkownicy: () => http('GET', '/uzytkownicy'),
+  dodajUzytkownika: (dane) => http('POST', '/uzytkownicy', dane),
+  usunUzytkownika: (id) => http('DELETE', `/uzytkownicy/${id}`),
+  ustawHaslo: (id, haslo) => http('POST', `/uzytkownicy/${id}/haslo`, { haslo }),
+  resetuj2fa: (id) => http('POST', `/uzytkownicy/${id}/reset-2fa`),
 
   sprawy: (filtry) => http('GET', '/sprawy' + qs(filtry)),
   sprawa: (id) => http('GET', `/sprawy/${id}`),
