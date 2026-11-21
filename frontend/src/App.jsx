@@ -10,7 +10,6 @@ const NAV = [
   { to: '/', label: 'Kalendarz', end: true },
   { to: '/nowy', label: 'Nowy wniosek' },
   { to: '/archiwum', label: 'Archiwum' },
-  { to: '/anonimizacja', label: 'Anonimizacja' },
   { to: '/ustawienia', label: 'Ustawienia' },
 ]
 
@@ -66,7 +65,6 @@ export default function App() {
           <Route path="/nowy" element={<NowyWniosek />} />
           <Route path="/sprawy/:id" element={<Sprawa />} />
           <Route path="/archiwum" element={<WPrzygotowaniu tytul="Archiwum" opis="Import archiwalnych wniosków i odpowiedzi oraz wyszukiwanie podobnych spraw." />} />
-          <Route path="/anonimizacja" element={<WPrzygotowaniu tytul="Anonimizacja" opis="Wgraj dokument – system zaproponuje dane do ukrycia (szare), po akceptacji zostaną zaczernione." />} />
           <Route path="/ustawienia" element={<WPrzygotowaniu tytul="Ustawienia" opis="Ustawy i cytowania (Dz. U.), lista wydziałów, model AI." />} />
           <Route path="*" element={<WPrzygotowaniu tytul="Nie znaleziono strony" opis="Wróć do kalendarza." />} />
         </Routes>

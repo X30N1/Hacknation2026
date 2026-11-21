@@ -255,6 +255,12 @@ export async function handle(method, path, body) {
       s.zdarzenia.push(ev(body.typ, body.data, body.payload || {}, body.nowy_termin || null, body.inicjaly || null))
       return clone(przelicz(s))
     }
+    if (method === 'POST' && (m = p.match(/^\/sprawy\/(\d+)\/dokumenty$/))) {
+      const s = sprawy.find((x) => x.id === Number(m[1]))
+      const { dokument } = await analiza(body)
+      Object.assign(dokument, { sprawa_id: s.id, rodzaj: body.get('rodzaj') || 'INNE' })
+      return clone(dokument)
+    }
     if (method === 'PATCH' && (m = p.match(/^\/dokumenty\/(\d+)$/))) {
       const doc = dokumenty.find((x) => x.id === Number(m[1]))
       doc.tekst = body.tekst

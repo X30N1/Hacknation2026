@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Flagi, PilnoscBadge, StatusBadge } from '../components/Badges'
 import { addDays, addMonths, diffDays, formatPL, todayISO } from '../lib/dates'
 import { METODA, ZDARZENIE } from '../lib/labels'
 import OcrBaner from '../components/OcrBaner'
+import AnonimizacjaPodglad from '../components/AnonimizacjaPodglad'
+
+const RODZAJE = ['ODPOWIEDZ', 'WNIOSEK', 'KWERENDA', 'INNE']
 
 // Akcje dostępne w danym statusie. `pole` = dodatkowe dane w formularzu.
 const AKCJE = [
@@ -19,14 +22,18 @@ const AKCJE = [
 
 function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
   const [data, setData] = useState(todayISO())
-  const [nowyTermin, setNowyTermin] = useState(sprawa.termin ? addDays(sprawa.termin, 14) : '')
+  const maxTermin = addMonths(sprawa.data_wplywu, 2)
+  const proponowany = sprawa.termin ? addDays(sprawa.termin, 14) : ''
+  const [nowyTermin, setNowyTermin] = useState(
+    proponowany && diffDays(proponowany, maxTermin) > 0 ? maxTermin : proponowany)
   const [wydzialy, setWydzialy] = useState('')
   const [inicjaly, setInicjaly] = useState(sprawa.inicjaly || '')
-  const maxTermin = addMonths(sprawa.data_wplywu, 2)
+  // Kalendarz (atrybut max) blokuje wybór, ale datę można jeszcze wpisać ręcznie – stąd też blokada zapisu.
   const zaDlugo = akcja.pole === 'nowy_termin' && nowyTermin && diffDays(nowyTermin, maxTermin) > 0
 
   function submit(e) {
     e.preventDefault()
+    if (zaDlugo) return
     const dane = { typ: akcja.typ, data, inicjaly: inicjaly || null }
     if (akcja.pole === 'nowy_termin') dane.nowy_termin = nowyTermin
     if (akcja.pole === 'wydzialy') dane.payload = { wydzialy: wydzialy.split(',').map((x) => x.trim()).filter(Boolean) }
@@ -40,7 +47,7 @@ function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
       {akcja.pole === 'nowy_termin' && (
         <label className="field">
           Nowy termin (maks. {formatPL(maxTermin)} – 2 miesiące od wpływu)
-          <input type="date" required value={nowyTermin} onChange={(e) => setNowyTermin(e.target.value)} />
+          <input type="date" required max={maxTermin} value={nowyTermin} onChange={(e) => setNowyTermin(e.target.value)} />
           {zaDlugo && <span className="txt-danger">Termin przekracza 2 miesiące od dnia wpływu (art. 13 ust. 2 UDIP).</span>}
         </label>
       )}
@@ -54,13 +61,44 @@ function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
       <p className="hint">Aplikacja niczego nie wysyła – tylko zapisuje, co zostało zrobione.</p>
       <div className="actions">
         <button type="button" className="btn" onClick={onAnuluj}>Anuluj</button>
-        <button type="submit" className="btn btn-primary">Zapisz</button>
+        <button type="submit" className="btn btn-primary" disabled={!!zaDlugo}>Zapisz</button>
       </div>
     </form>
   )
 }
 
-function Dokument({ dok, onZapisz }) {
+function DodajDokument({ onDodaj }) {
+  const [rodzaj, setRodzaj] = useState('ODPOWIEDZ')
+  const [trwa, setTrwa] = useState(false)
+  const input = useRef(null)
+
+  async function wybrano(plik) {
+    if (!plik) return
+    setTrwa(true)
+    try {
+      await onDodaj(plik, rodzaj)
+    } finally {
+      setTrwa(false)
+      if (input.current) input.current.value = ''
+    }
+  }
+
+  return (
+    <div className="actions add-doc">
+      <label className="field">Rodzaj
+        <select value={rodzaj} onChange={(e) => setRodzaj(e.target.value)}>
+          {RODZAJE.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </label>
+      <button type="button" className="btn btn-primary" disabled={trwa} onClick={() => input.current?.click()}>
+        {trwa ? 'Odczytuję dokument…' : 'Dodaj dokument'}
+      </button>
+      <input ref={input} type="file" accept=".pdf,.docx,.txt" hidden onChange={(e) => wybrano(e.target.files[0])} />
+    </div>
+  )
+}
+
+function Dokument({ dok, onZapisz, onAnonimizuj }) {
   const [edycja, setEdycja] = useState(false)
   const [tekst, setTekst] = useState(dok.tekst)
   return (
@@ -68,6 +106,7 @@ function Dokument({ dok, onZapisz }) {
       <div className="doc-head">
         <strong>{dok.nazwa_pliku}</strong>
         <span className="muted">{dok.rodzaj} · {METODA[dok.metoda] || dok.metoda}{dok.wydzial ? ` · ${dok.wydzial}` : ''}</span>
+        {!edycja && <button className="btn btn-small" onClick={() => onAnonimizuj(dok)}>Anonimizuj</button>}
         {!edycja && <button className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>}
       </div>
       <OcrBaner dokument={dok} />
@@ -91,9 +130,21 @@ export default function Sprawa() {
   const [s, setS] = useState(null)
   const [blad, setBlad] = useState(null)
   const [akcja, setAkcja] = useState(null)
+  const [anon, setAnon] = useState(null) // dokument w trakcie anonimizacji
 
   const wczytaj = useCallback(() => api.sprawa(id).then(setS).catch((e) => setBlad(e.message)), [id])
   useEffect(() => { wczytaj() }, [wczytaj])
+
+  async function dodajDokument(plik, rodzaj) {
+    setBlad(null)
+    try {
+      const dok = await api.dodajDokument(id, plik, rodzaj)
+      await wczytaj()
+      setAnon(dok) // zaraz po dodaniu pokaż podgląd do anonimizacji
+    } catch (e) {
+      setBlad(e.message)
+    }
+  }
 
   async function zapiszZdarzenie(dane) {
     setBlad(null)
@@ -191,8 +242,10 @@ export default function Sprawa() {
 
       <div className="card">
         <h2>Dokumenty</h2>
+        <DodajDokument onDodaj={dodajDokument} />
+        {anon && <AnonimizacjaPodglad key={anon.id} dokument={anon} onZamknij={() => setAnon(null)} />}
         {s.dokumenty?.length ? (
-          s.dokumenty.map((dok) => <Dokument key={dok.id} dok={dok} onZapisz={zapiszTekst} />)
+          s.dokumenty.map((dok) => <Dokument key={dok.id} dok={dok} onZapisz={zapiszTekst} onAnonimizuj={setAnon} />)
         ) : (
           <p className="muted">Brak dokumentów w sprawie.</p>
         )}

@@ -192,3 +192,14 @@ pre.doc-text.readonly { white-space: pre-wrap; background: var(--bg); border-rad
   .grid-2 { grid-template-columns: 1fr; }
   .legend { margin-left: 0; }
 }
+
+/* anonimizacja */
+.anon { border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 12px; background: var(--surface); }
+.anon-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.anon-toolbar { justify-content: flex-start; align-items: center; margin-bottom: 8px; }
+pre.anon-text { max-height: 480px; user-select: text; }
+.anon-frag { cursor: pointer; border-radius: 3px; }
+.anon-frag.on { background: #c4c9d0; color: #1c2430; }
+.anon-frag.off { border-bottom: 2px dotted var(--muted); }
+.anon-frag:focus-visible { outline: 2px solid var(--focus); }
+.redacted { background: #000; color: #000; border-radius: 2px; user-select: none; }
