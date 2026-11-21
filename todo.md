@@ -64,8 +64,10 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 ## Integracja frontend ↔ backend
 
 - [ ] Widok czatu z asystentem we frontendzie (`/llm/*` nie są jeszcze nigdzie używane) – w tym `sources` z RAG
-- [ ] „Podobne sprawy z archiwum” i „Sugerowane wydziały” w widoku sprawy – backendu brak (RAG nad dokumentami spraw)
-- [ ] Widoki „Archiwum”, „Anonimizacja”, „Ustawienia” – backendu brak
+- [x] „Podobne sprawy z archiwum” i „Sugerowane wydziały” w widoku sprawy (`/sprawy/{id}/podobne`, `/sprawy/{id}/wydzialy`)
+- [x] Widok „Archiwum i wiedza” (wyszukiwarka + baza wiedzy); anonimizacja jest krokiem dodawania dokumentu
+- [ ] Widok „Ustawienia” (lista wydziałów i słów kluczowych, model AI) – dziś w kodzie / `config.toml`
+- [ ] Strojenie progu podobnych spraw (`PROG_POKRYCIA`) i słów kluczowych wydziałów na większym archiwum
 - [ ] Prefiks `/api`: w dev obcina go proxy Vite; przy serwowaniu `dist/` z FastAPI (Docker) – zamontować routery pod `/api` albo reverse proxy
 - [ ] `url_podgladu` jest względny wobec API (`/dokumenty/{id}/plik`) – frontend musi dodać `/api`
 - [ ] Format znacznika czasu w `/llm/*` (`GG-MM:DD-MM-RRRR`) vs ISO w sprawach – ujednolicić
@@ -79,11 +81,12 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 - [ ] Import archiwalnych pism (PDF) do istniejących spraw
 - [ ] Usuwanie / cofanie zdarzeń (pomyłka urzędnika) z zachowaniem historii
 - [ ] Przypomnienia o zbliżających się terminach (w aplikacji – bez wysyłki na zewnątrz)
-- [ ] Generowanie projektu odpowiedzi z dokumentów sprawy (LLM) jako dokument `PROJEKT`
+- [x] Generowanie projektu odpowiedzi z dokumentów sprawy (LLM / szablon) jako dokument `PROJEKT`
 
 ## Anonimizacja
 
-- [ ] Usunąć `POST /wnioski/analiza` i `dokument_id` w `POST /sprawy` (zapisują oryginał) – frontend już ich nie używa (zostały w `client.js` / `mock.js`)
+- [x] Usunąć `POST /wnioski/analiza` i `dokument_id` w `POST /sprawy` (zapisywały oryginał)
+- [x] Serwer odrzuca zapis tekstu z niezamazanym PESEL / numerem dowodu
 - [ ] Zachować `metoda` / `ocr_pewnosc` odczytu przy zapisie zanonimizowanego `.txt` (dziś zawsze `RECZNA`)
 - [ ] Weryfikacja po stronie serwera, że zapisywany tekst przeszedł anonimizację (np. ponowne wykrycie PESEL itp. i ostrzeżenie)
 - [ ] Anonimizacja `context` w czacie przed `POST /llm/request` (endpoint `POST /anonimizacja` już jest)
@@ -128,6 +131,7 @@ Osobna usługa przechowywania dokumentów, z której RAG może wyszukiwać i cyt
 
 ## Infrastruktura
 
-- [ ] Dockerfile + docker-compose (backend, baza, serwer plików, OCR, Ollama)
+- [x] Dockerfile + docker-compose (frontend + backend + OCR w jednym obrazie, Ollama w profilu `ai`)
+- [ ] Sprawdzić budowanie obrazu Dockera na czystej maszynie (nie było testowane)
 - [ ] CI: testy, lint (ruff), typy (mypy)
 - [ ] `.gitignore` w katalogu głównym repo (usunięty w working tree)

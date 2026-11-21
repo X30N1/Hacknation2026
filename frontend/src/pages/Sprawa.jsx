@@ -2,26 +2,32 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Flagi, PilnoscBadge, StatusBadge } from '../components/Badges'
-import { addDays, addMonths, diffDays, formatPL, todayISO } from '../lib/dates'
-import { METODA, ZDARZENIE } from '../lib/labels'
+import NowyDokument from '../components/NowyDokument'
 import OcrBaner from '../components/OcrBaner'
-import AnonimizacjaPodglad from '../components/AnonimizacjaPodglad'
+import ProjektOdpowiedzi from '../components/ProjektOdpowiedzi'
 import { jakoPlikTxt } from '../lib/anonimizacja'
+import { addDays, addMonths, diffDays, formatPL, todayISO } from '../lib/dates'
+import { METODA, RODZAJ_DOKUMENTU, RODZAJE_W_SPRAWIE, ZDARZENIE, ZRODLO_SUGESTII } from '../lib/labels'
+import Podswietl from '../components/Podswietl'
+import { bezRozszerzenia, pobierzBlob, pobierzTekst } from '../lib/pobierz'
 
-const RODZAJE = ['ODPOWIEDZ', 'WNIOSEK', 'KWERENDA', 'INNE']
 const AKCEPTOWANE = '.pdf,.docx,.txt'
+const ROBOCZE = ['W_WYDZIALACH', 'PRZEDLUZONA']
 
-// Akcje dostępne w danym statusie. `pole` = dodatkowe dane w formularzu.
+// Akcje w danym statusie (kolejność jak w przebiegu sprawy). `tryb`:
+//   formularz – data/inicjały (+ wydziały / nowy termin), plik – wgranie dokumentu, projekt – projekt pisma.
 const AKCJE = [
-  { typ: 'PRZEKAZANIE', label: 'Przekazano do wydziałów', pole: 'wydzialy', gdy: ['NOWY', 'W_WYDZIALACH', 'PRZEDLUZONA'] },
-  { typ: 'WEZWANIE_DOPRECYZOWANIE', label: 'Wezwanie do doprecyzowania', gdy: ['NOWY', 'W_WYDZIALACH'] },
-  { typ: 'DOPRECYZOWANIE_OTRZYMANE', label: 'Otrzymano doprecyzowanie', gdy: ['DOPRECYZOWANIE'] },
-  { typ: 'PRZEDLUZENIE', label: 'Przedłuż termin (kwerenda)', pole: 'nowy_termin', gdy: ['NOWY', 'W_WYDZIALACH', 'PRZEDLUZONA'] },
-  // plik: klik otwiera wybór pliku odpowiedzi; zapis dokumentu zatwierdza zdarzenie automatycznie
-  { typ: 'PROJEKT', label: 'Odpowiedź przygotowana – wgraj plik', plik: true, gdy: ['W_WYDZIALACH', 'PRZEDLUZONA'] },
-  { typ: 'WYSLANO', label: 'Oznacz jako wysłaną', gdy: ['PROJEKT_GOTOWY'] },
-  { typ: 'BEZ_ROZPOZNANIA', label: 'Pozostaw bez rozpoznania', gdy: ['DOPRECYZOWANIE'] },
+  { id: 'przekazanie', typ: 'PRZEKAZANIE', label: 'Przekazano do wydziałów', tryb: 'formularz', pole: 'wydzialy', gdy: ['NOWY', ...ROBOCZE] },
+  { id: 'odp-wydzialu', typ: 'ODP_WYDZIALU', label: 'Odpowiedź wydziału – wgraj plik', tryb: 'plik', gdy: ROBOCZE },
+  { id: 'projekt', typ: 'PROJEKT', label: 'Przygotuj projekt odpowiedzi', tryb: 'projekt', glowna: true, gdy: ROBOCZE },
+  { id: 'gotowa', typ: 'PROJEKT', label: 'Wgraj gotową odpowiedź', tryb: 'plik', gdy: ROBOCZE },
+  { id: 'wezwanie', typ: 'WEZWANIE_DOPRECYZOWANIE', label: 'Wezwanie do doprecyzowania', tryb: 'formularz', gdy: ['NOWY', 'W_WYDZIALACH'] },
+  { id: 'doprecyzowanie', typ: 'DOPRECYZOWANIE_OTRZYMANE', label: 'Otrzymano doprecyzowanie', tryb: 'formularz', gdy: ['DOPRECYZOWANIE'] },
+  { id: 'przedluzenie', typ: 'PRZEDLUZENIE', label: 'Przedłuż termin (kwerenda)', tryb: 'formularz', pole: 'nowy_termin', gdy: ['NOWY', ...ROBOCZE] },
+  { id: 'wyslano', typ: 'WYSLANO', label: 'Oznacz jako wysłaną', tryb: 'formularz', glowna: true, gdy: ['PROJEKT_GOTOWY'] },
+  { id: 'bez', typ: 'BEZ_ROZPOZNANIA', label: 'Pozostaw bez rozpoznania', tryb: 'formularz', gdy: ['DOPRECYZOWANIE'] },
 ]
+const AKCJA = Object.fromEntries(AKCJE.map((a) => [a.id, a]))
 
 function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
   const [data, setData] = useState(todayISO())
@@ -29,7 +35,7 @@ function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
   const proponowany = sprawa.termin ? addDays(sprawa.termin, 14) : ''
   const [nowyTermin, setNowyTermin] = useState(
     proponowany && diffDays(proponowany, maxTermin) > 0 ? maxTermin : proponowany)
-  const [wydzialy, setWydzialy] = useState('')
+  const [wydzialy, setWydzialy] = useState((akcja.wydzialy || []).join(', '))
   const [inicjaly, setInicjaly] = useState(sprawa.inicjaly || '')
   // Kalendarz (atrybut max) blokuje wybór, ale datę można jeszcze wpisać ręcznie – stąd też blokada zapisu.
   const zaDlugo = akcja.pole === 'nowy_termin' && nowyTermin && diffDays(nowyTermin, maxTermin) > 0
@@ -39,14 +45,14 @@ function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
     if (zaDlugo) return
     const dane = { typ: akcja.typ, data, inicjaly: inicjaly || null }
     if (akcja.pole === 'nowy_termin') dane.nowy_termin = nowyTermin
-    if (akcja.pole === 'wydzialy') dane.payload = { wydzialy: wydzialy.split(',').map((x) => x.trim()).filter(Boolean) }
+    if (akcja.pole === 'wydzialy') dane.payload = { wydzialy: wydzialy.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean) }
     onZapisz(dane)
   }
 
   return (
     <form className="action-form" onSubmit={submit}>
       <strong>{akcja.label}</strong>
-      <label className="field">Data<input type="date" required value={data} onChange={(e) => setData(e.target.value)} /></label>
+      <label className="field">Data<input type="date" required max={todayISO()} value={data} onChange={(e) => setData(e.target.value)} /></label>
       {akcja.pole === 'nowy_termin' && (
         <label className="field">
           Nowy termin (maks. {formatPL(maxTermin)} – 2 miesiące od wpływu)
@@ -70,86 +76,92 @@ function FormularzAkcji({ akcja, sprawa, onZapisz, onAnuluj }) {
   )
 }
 
-// Nowy dokument w sprawie: odczyt BEZ zapisu → (poprawa tekstu) → anonimizacja → zapis wyłącznie
-// zanonimizowanej treści. `zadanie` = { plik, rodzaj, odpowiedz } – odpowiedź ma stały rodzaj ODPOWIEDZ.
-function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj }) {
-  const [odczyt, setOdczyt] = useState(null)
-  const [tekst, setTekst] = useState('')
-  const [edycja, setEdycja] = useState(false)
-  const [rodzaj, setRodzaj] = useState(zadanie.rodzaj)
-  const [zanonimizowany, setZanonimizowany] = useState(null)
+function PodobneSprawy({ sprawa }) {
+  const [lista, setLista] = useState(null)
   const [blad, setBlad] = useState(null)
-  const [zapis, setZapis] = useState(false)
-  const panel = useRef(null)
+  const liczbaDok = sprawa.dokumenty.length
 
   useEffect(() => {
     let aktualne = true
-    panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    api.odczytajDokument(zadanie.plik)
-      .then((o) => {
+    api.podobneSprawy(sprawa.id)
+      .then((l) => aktualne && setLista(l))
+      .catch((e) => aktualne && setBlad(e.message))
+    return () => { aktualne = false }
+  }, [sprawa.id, sprawa.przedmiot, liczbaDok])
+
+  return (
+    <div className="card">
+      <h2>Podobne sprawy z archiwum</h2>
+      {blad && <p className="txt-danger">{blad}</p>}
+      {!lista && !blad && <p className="muted">Szukam w archiwum…</p>}
+      {lista?.length === 0 && <p className="muted">Brak podobnych spraw w archiwum.</p>}
+      <ul className="podobne">
+        {lista?.map((p) => (
+          <li key={p.id}>
+            <div className="podobne-head">
+              <Link to={`/sprawy/${p.id}`}>{p.znak}</Link>
+              <span className="muted">{formatPL(p.data_wplywu)}</span>
+              <StatusBadge status={p.status} />
+              {p.ma_odpowiedz && <span className="pill pill-ok">jest odpowiedź</span>}
+            </div>
+            <div>{p.przedmiot}</div>
+            {p.wydzialy.length > 0 && <div className="hint">Wydziały: {p.wydzialy.join(', ')}</div>}
+            {p.fragment && <div className="fragment"><Podswietl tekst={p.fragment} /></div>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function SugerowaneWydzialy({ sprawa, onPrzekaz, onLista }) {
+  const [dane, setDane] = useState(null)
+  const [blad, setBlad] = useState(null)
+  const [wybrane, setWybrane] = useState([])
+  const mozna = AKCJA.przekazanie.gdy.includes(sprawa.status)
+
+  useEffect(() => {
+    let aktualne = true
+    api.sugestieWydzialow(sprawa.id)
+      .then((d) => {
         if (!aktualne) return
-        setOdczyt(o)
-        setTekst(o.tekst)
-        setEdycja(!o.tekst.trim()) // pusty odczyt (np. pismo odręczne) – od razu do wpisania
+        setDane(d)
+        setWybrane(d.sugestie.slice(0, 1).map((s) => s.skrot))
+        onLista(d.wszystkie)
       })
       .catch((e) => aktualne && setBlad(e.message))
     return () => { aktualne = false }
-  }, [zadanie])
+  }, [sprawa.id, sprawa.przedmiot, onLista])
 
-  async function zapisz() {
-    if (zanonimizowany == null) return
-    setBlad(null)
-    setZapis(true)
-    try {
-      await onZapisz(jakoPlikTxt(odczyt.nazwa_pliku, zanonimizowany), rodzaj)
-    } catch (e) {
-      setBlad(e.message)
-      setZapis(false)
-    }
-  }
+  const przelacz = (skrot) => setWybrane((w) => (w.includes(skrot) ? w.filter((x) => x !== skrot) : [...w, skrot]))
 
   return (
-    <div className="card" ref={panel}>
-      <div className="doc-head">
-        <h2>{zadanie.odpowiedz ? 'Odpowiedź na wniosek' : 'Nowy dokument'}</h2>
-        <span className="muted">{zadanie.plik.name}</span>
-      </div>
-      {blad && <div className="card error" role="alert">{blad}</div>}
-      {!odczyt && !blad && (
-        <p className="muted"><span className="spinner" aria-hidden="true" /> Odczytuję dokument… (skany mogą potrwać do minuty)</p>
+    <div className="card">
+      <h2>Sugerowane wydziały</h2>
+      {blad && <p className="txt-danger">{blad}</p>}
+      {!dane && !blad && <p className="muted">Analizuję wniosek…</p>}
+      {dane?.sugestie.length === 0 && <p className="muted">Brak propozycji – wybierz wydział samodzielnie.</p>}
+      <ul className="sugestie">
+        {dane?.sugestie.map((s) => (
+          <li key={s.skrot}>
+            <label className="check">
+              {mozna && <input type="checkbox" checked={wybrane.includes(s.skrot)} onChange={() => przelacz(s.skrot)} />}
+              <span><strong>{s.skrot}</strong> – {s.nazwa}</span>
+            </label>
+            <div className="hint">
+              <span className="pill pill-muted">{ZRODLO_SUGESTII[s.zrodlo] || s.zrodlo}</span> {s.uzasadnienie}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {mozna && dane?.sugestie.length > 0 && (
+        <div className="actions">
+          <button type="button" className="btn" disabled={!wybrane.length} onClick={() => onPrzekaz(wybrane)}>
+            Przekazano do zaznaczonych…
+          </button>
+        </div>
       )}
-      {odczyt && (
-        <>
-          <OcrBaner dokument={odczyt} />
-          <div className="actions anon-toolbar">
-            {!zadanie.odpowiedz && (
-              <label className="field">Rodzaj
-                <select value={rodzaj} onChange={(e) => setRodzaj(e.target.value)}>
-                  {RODZAJE.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </label>
-            )}
-            {edycja ? (
-              <button type="button" className="btn btn-small" disabled={!tekst.trim()} onClick={() => setEdycja(false)}>
-                Gotowe – przejdź do anonimizacji
-              </button>
-            ) : (
-              <button type="button" className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>
-            )}
-          </div>
-          {edycja ? (
-            <textarea className="doc-text" rows={16} value={tekst} onChange={(e) => setTekst(e.target.value)} aria-label="Treść dokumentu" />
-          ) : (
-            <AnonimizacjaPodglad tekst={tekst} wnioskodawca={wnioskodawca} onZmiana={setZanonimizowany} />
-          )}
-        </>
-      )}
-      <div className="actions">
-        <button type="button" className="btn" disabled={zapis} onClick={onAnuluj}>Anuluj</button>
-        <button type="button" className="btn btn-primary" disabled={zapis || edycja || zanonimizowany == null} onClick={zapisz}>
-          {zapis ? 'Zapisuję…' : zadanie.odpowiedz ? 'Zanonimizuj, zapisz i oznacz odpowiedź jako przygotowaną' : 'Zanonimizuj i zapisz'}
-        </button>
-      </div>
+      <p className="hint">Propozycje – decyzję podejmuje urzędnik. Lista jednostek wg BIP UM Bydgoszcz.</p>
     </div>
   )
 }
@@ -157,20 +169,39 @@ function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj }) {
 function Dokument({ dok, onZapisz }) {
   const [edycja, setEdycja] = useState(false)
   const [tekst, setTekst] = useState(dok.tekst)
+  const [blad, setBlad] = useState(null)
+  const nazwa = bezRozszerzenia(dok.nazwa_pliku)
+
+  async function docx() {
+    setBlad(null)
+    try {
+      pobierzBlob(await api.pobierzDocx(dok.id), `${nazwa}.docx`)
+    } catch (e) {
+      setBlad(e.message)
+    }
+  }
+
   return (
-    <div className="doc">
+    <div className={`doc doc-${dok.rodzaj}`}>
       <div className="doc-head">
-        <strong>{dok.nazwa_pliku}</strong>
-        <span className="muted">{dok.rodzaj} · {METODA[dok.metoda] || dok.metoda}{dok.wydzial ? ` · ${dok.wydzial}` : ''}</span>
-        {!edycja && <button className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>}
+        <strong>{RODZAJ_DOKUMENTU[dok.rodzaj] || dok.rodzaj}</strong>
+        <span className="muted">{dok.nazwa_pliku} · {METODA[dok.metoda] || dok.metoda}{dok.wydzial ? ` · ${dok.wydzial}` : ''}</span>
+        {!edycja && (
+          <span className="doc-buttons">
+            <button className="btn btn-small" onClick={docx}>Pobierz .docx</button>
+            <button className="btn btn-small" onClick={() => pobierzTekst(dok.tekst, `${nazwa}.txt`)}>Pobierz .txt</button>
+            <button className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>
+          </span>
+        )}
       </div>
+      {blad && <p className="txt-danger">{blad}</p>}
       <OcrBaner dokument={dok} />
       {edycja ? (
         <>
           <textarea className="doc-text" rows={14} value={tekst} onChange={(e) => setTekst(e.target.value)} />
           <div className="actions">
             <button className="btn" onClick={() => { setTekst(dok.tekst); setEdycja(false) }}>Anuluj</button>
-            <button className="btn btn-primary" onClick={async () => { await onZapisz(dok.id, tekst); setEdycja(false) }}>Zapisz tekst</button>
+            <button className="btn btn-primary" onClick={async () => { if (await onZapisz(dok.id, tekst)) setEdycja(false) }}>Zapisz tekst</button>
           </div>
         </>
       ) : (
@@ -184,42 +215,64 @@ export default function Sprawa() {
   const { id } = useParams()
   const [s, setS] = useState(null)
   const [blad, setBlad] = useState(null)
-  const [akcja, setAkcja] = useState(null)
-  const [nowy, setNowy] = useState(null) // { plik, rodzaj, odpowiedz } – dokument przed zapisem
+  const [akcja, setAkcja] = useState(null)      // formularz zdarzenia
+  const [panel, setPanel] = useState(null)      // { typ: 'dokument', zadanie, cel } | { typ: 'projekt' }
+  const [jednostki, setJednostki] = useState([]) // lista wydziałów UMB (z sugestii)
   const wyborPliku = useRef(null)
-  const wyborCel = useRef(null) // co otworzyło wybór pliku: { rodzaj, odpowiedz }
-  const zapisanyDok = useRef(false) // odpowiedź: dokument już zapisany, ponawiamy tylko zdarzenie
+  const wyborCel = useRef(null)                 // co otworzyło wybór pliku
+  const zapisanyDok = useRef(false)             // dokument już zapisany – przy ponowieniu tylko zdarzenie
 
   const wczytaj = useCallback(() => api.sprawa(id).then(setS).catch((e) => setBlad(e.message)), [id])
   useEffect(() => { wczytaj() }, [wczytaj])
 
-  function wybierzPlik(rodzaj, odpowiedz = false) {
-    wyborCel.current = { rodzaj, odpowiedz }
+  function wybierzPlik(cel) {
+    wyborCel.current = cel
     wyborPliku.current?.click()
   }
 
   function wybrano(plik) {
     if (wyborPliku.current) wyborPliku.current.value = ''
     if (!plik) return
+    const cel = wyborCel.current
     setBlad(null)
     setAkcja(null)
     zapisanyDok.current = false
-    setNowy({ plik, ...wyborCel.current })
+    const zadania = {
+      'odp-wydzialu': { tytul: 'Odpowiedź wydziału', rodzaj: 'ODP_WYDZIALU', wydzialy: jednostki.length ? jednostki : null,
+        przycisk: 'Zanonimizuj i zapisz odpowiedź wydziału' },
+      gotowa: { tytul: 'Gotowa odpowiedź na wniosek', rodzaj: 'ODPOWIEDZ',
+        przycisk: 'Zanonimizuj, zapisz i oznacz odpowiedź jako przygotowaną' },
+      dokument: { tytul: 'Nowy dokument', rodzaj: 'INNE', rodzaje: RODZAJE_W_SPRAWIE, przycisk: 'Zanonimizuj i zapisz' },
+    }
+    setPanel({ typ: 'dokument', cel, zadanie: { plik, ...zadania[cel] } })
   }
 
-  async function zapiszNowy(plikTxt, rodzaj) {
+  async function zapiszZdarzenieWPanelu(dane) {
+    try {
+      await api.dodajZdarzenie(id, { data: todayISO(), inicjaly: s.inicjaly || null, ...dane })
+    } catch (e) {
+      throw new Error(`Dokument zapisano, ale nie zapisano zdarzenia w historii: ${e.message}`, { cause: e })
+    }
+  }
+
+  async function zapiszDokument(plikTxt, { rodzaj, wydzial }) {
     if (!zapisanyDok.current) {
-      await api.dodajDokument(id, plikTxt, rodzaj)
+      await api.dodajDokument(id, plikTxt, rodzaj, wydzial)
       zapisanyDok.current = true
     }
-    if (nowy.odpowiedz) {
-      try {
-        await api.dodajZdarzenie(id, { typ: 'PROJEKT', data: todayISO(), inicjaly: s.inicjaly || null })
-      } catch (e) {
-        throw new Error(`Odpowiedź zapisano, ale nie oznaczono jako przygotowanej: ${e.message}`, { cause: e })
-      }
+    if (panel.cel === 'odp-wydzialu') await zapiszZdarzenieWPanelu({ typ: 'ODP_WYDZIALU', payload: { wydzial } })
+    if (panel.cel === 'gotowa') await zapiszZdarzenieWPanelu({ typ: 'PROJEKT' })
+    setPanel(null)
+    await wczytaj()
+  }
+
+  async function zapiszProjekt(zanonimizowany) {
+    if (!zapisanyDok.current) {
+      await api.dodajDokument(id, jakoPlikTxt(`Projekt odpowiedzi - ${s.znak}`, zanonimizowany), 'PROJEKT')
+      zapisanyDok.current = true
     }
-    setNowy(null)
+    await zapiszZdarzenieWPanelu({ typ: 'PROJEKT' })
+    setPanel(null)
     await wczytaj()
   }
 
@@ -235,17 +288,27 @@ export default function Sprawa() {
   }
 
   async function zapiszTekst(dokId, tekst) {
+    setBlad(null)
     try {
       await api.poprawTekst(dokId, tekst)
       await wczytaj()
+      return true
     } catch (e) {
       setBlad(e.message)
+      return false
     }
+  }
+
+  function kliknij(a) {
+    if (a.tryb === 'plik') wybierzPlik(a.id)
+    else if (a.tryb === 'projekt') { zapisanyDok.current = false; setAkcja(null); setPanel({ typ: 'projekt' }) }
+    else setAkcja(a)
   }
 
   if (!s) return blad ? <div className="card error" role="alert">{blad}</div> : <p className="muted">Wczytywanie…</p>
 
   const dostepne = AKCJE.filter((a) => a.gdy.includes(s.status))
+  const zajete = !!panel
 
   return (
     <section>
@@ -281,12 +344,13 @@ export default function Sprawa() {
         <div className="card">
           <h2>Co dalej?</h2>
           {akcja ? (
-            <FormularzAkcji akcja={akcja} sprawa={s} onZapisz={zapiszZdarzenie} onAnuluj={() => setAkcja(null)} />
+            <FormularzAkcji key={akcja.id + (akcja.wydzialy || []).join()} akcja={akcja} sprawa={s}
+              onZapisz={zapiszZdarzenie} onAnuluj={() => setAkcja(null)} />
           ) : dostepne.length ? (
             <div className="action-buttons">
               {dostepne.map((a) => (
-                <button key={a.typ} className="btn" disabled={a.plik && !!nowy}
-                  onClick={() => (a.plik ? wybierzPlik('ODPOWIEDZ', true) : setAkcja(a))}>{a.label}</button>
+                <button key={a.id} className={`btn ${a.glowna ? 'btn-primary' : ''}`}
+                  disabled={zajete && a.tryb !== 'formularz'} onClick={() => kliknij(a)}>{a.label}</button>
               ))}
             </div>
           ) : (
@@ -300,6 +364,7 @@ export default function Sprawa() {
                 <span className="nowrap">{formatPL(e.data)}</span> – {ZDARZENIE[e.typ] || e.typ}
                 {e.nowy_termin && <> → nowy termin {formatPL(e.nowy_termin)}</>}
                 {e.payload?.wydzialy?.length > 0 && <> ({e.payload.wydzialy.join(', ')})</>}
+                {e.payload?.wydzial && <> ({e.payload.wydzial})</>}
                 {e.inicjaly && <span className="muted"> · {e.inicjaly}</span>}
               </li>
             ))}
@@ -308,18 +373,27 @@ export default function Sprawa() {
       </div>
 
       <input ref={wyborPliku} type="file" accept={AKCEPTOWANE} hidden onChange={(e) => wybrano(e.target.files[0])} />
-      {nowy && (
-        <NowyDokument key={`${nowy.plik.name}-${nowy.plik.lastModified}-${nowy.odpowiedz}`} zadanie={nowy}
-          wnioskodawca={s.wnioskodawca} onZapisz={zapiszNowy} onAnuluj={() => setNowy(null)} />
+      {panel?.typ === 'dokument' && (
+        <NowyDokument key={`${panel.cel}-${panel.zadanie.plik.name}-${panel.zadanie.plik.lastModified}`}
+          zadanie={panel.zadanie} wnioskodawca={s.wnioskodawca} onZapisz={zapiszDokument} onAnuluj={() => setPanel(null)} />
       )}
+      {panel?.typ === 'projekt' && (
+        <ProjektOdpowiedzi sprawa={s} onZapisz={zapiszProjekt} onAnuluj={() => setPanel(null)} />
+      )}
+
+      <div className="grid-2">
+        <PodobneSprawy sprawa={s} />
+        <SugerowaneWydzialy sprawa={s} onLista={setJednostki}
+          onPrzekaz={(wydzialy) => setAkcja({ ...AKCJA.przekazanie, wydzialy })} />
+      </div>
 
       <div className="card">
         <div className="doc-head">
           <h2>Dokumenty</h2>
-          <button type="button" className="btn btn-primary" disabled={!!nowy} onClick={() => wybierzPlik('INNE')}>Dodaj dokument</button>
+          <button type="button" className="btn btn-primary" disabled={zajete} onClick={() => wybierzPlik('dokument')}>Dodaj dokument</button>
         </div>
         {s.dokumenty?.length ? (
-          s.dokumenty.map((dok) => <Dokument key={dok.id} dok={dok} onZapisz={zapiszTekst} />)
+          s.dokumenty.map((dok) => <Dokument key={`${dok.id}-${dok.tekst.length}`} dok={dok} onZapisz={zapiszTekst} />)
         ) : (
           <p className="muted">Brak dokumentów w sprawie.</p>
         )}

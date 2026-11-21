@@ -126,54 +126,57 @@ def test_edycja():
 
 
 # ---------- dokumenty ----------
-def test_analiza_docx_i_rejestracja():
+def test_odczyt_wniosku_docx():
     plik = docx_bytes("Wniosek o udostępnienie informacji publicznej", "Proszę o wykaz dotacji.")
-    r = client.post("/wnioski/analiza", files={"plik": ("wniosek.docx", plik)})
+    r = client.post("/wnioski/odczyt", files={"plik": ("wniosek.docx", plik)})
     assert r.status_code == 200, r.text
-    wynik = r.json()
-    doc, prop = wynik["dokument"], wynik["propozycja"]
-    assert doc["metoda"] == "DOCX" and "wykaz dotacji" in doc["tekst"] and doc["sprawa_id"] is None
+    o, prop = r.json()["odczyt"], r.json()["propozycja"]
+    assert o["metoda"] == "DOCX" and "wykaz dotacji" in o["tekst"]
     assert prop["znak"] == "BKS.IV.1431.1.2026" and prop["data_wplywu"] == "2026-11-21"
     assert prop["przedmiot"] == "Proszę o wykaz dotacji."  # nagłówek pominięty
-
-    assert client.patch(f"/dokumenty/{doc['id']}", json={"tekst": "poprawiony"}).json()["tekst"] == "poprawiony"
-    s = nowa(znak=prop["znak"], wplyw=prop["data_wplywu"], dokument_id=doc["id"])
-    assert s["dokumenty"][0]["id"] == doc["id"] and s["dokumenty"][0]["tekst"] == "poprawiony"
-    # ponowne użycie dokumentu
+    assert client.post("/wnioski/analiza", files={"plik": ("wniosek.docx", plik)}).status_code in (404, 405)
     r = client.post("/sprawy", json={"znak": "BKS.IV.1431.2.2026", "data_wplywu": "2026-11-21",
-                                     "dokument_id": doc["id"]})
-    assert r.status_code == 409
-
-    pobrany = client.get(doc["url_podgladu"])
-    assert pobrany.status_code == 200 and pobrany.content == plik
+                                     "dokument_id": 1})
+    assert r.status_code == 422  # przypinanie oryginału z bazy nie istnieje
 
 
-def test_analiza_znak_z_nazwy_pliku_i_txt_cp1250():
+def test_odczyt_znak_z_nazwy_pliku_i_txt_cp1250():
     tekst = "Proszę o informację – żółć".encode("cp1250")
-    r = client.post("/wnioski/analiza", files={"plik": ("Wniosek - BKS.IV.1431.599.2026.txt", tekst)})
+    r = client.post("/wnioski/odczyt", files={"plik": ("Wniosek - BKS.IV.1431.599.2026.txt", tekst)})
     assert r.json()["propozycja"]["znak"] == "BKS.IV.1431.599.2026"
-    assert r.json()["dokument"]["tekst"] == "Proszę o informację – żółć"
-    assert r.json()["dokument"]["metoda"] == "RECZNA"
+    assert r.json()["odczyt"]["tekst"] == "Proszę o informację – żółć"
+    assert r.json()["odczyt"]["metoda"] == "RECZNA"
 
 
 def test_pdf_warstwa_tekstowa_i_skan(monkeypatch):
     tekst = "Wniosek o udostepnienie informacji publicznej dotyczacej budzetu miasta"
-    r = client.post("/wnioski/analiza", files={"plik": ("w.pdf", pdf_z_tekstem(tekst))}).json()
-    assert r["dokument"]["metoda"] == "PDF_TEXT" and tekst in r["dokument"]["tekst"]
+    r = client.post("/dokumenty/odczyt", files={"plik": ("w.pdf", pdf_z_tekstem(tekst))}).json()
+    assert r["metoda"] == "PDF_TEXT" and tekst in r["tekst"]
 
     monkeypatch.setattr(ekstrakcja, "ocr_dostepny", lambda: False)
-    r = client.post("/wnioski/analiza", files={"plik": ("skan.pdf", pdf_z_tekstem(""))}).json()
-    assert r["dokument"]["metoda"] == "OCR" and r["dokument"]["ocr_pewnosc"] == 0.0
+    r = client.post("/dokumenty/odczyt", files={"plik": ("skan.pdf", pdf_z_tekstem(""))}).json()
+    assert r["metoda"] == "OCR" and r["ocr_pewnosc"] == 0.0
 
 
 def test_formaty_i_rozmiar(monkeypatch):
     from app.config import settings
 
-    r = client.post("/wnioski/analiza", files={"plik": ("w.doc", b"x")})
+    r = client.post("/dokumenty/odczyt", files={"plik": ("w.doc", b"x")})
     assert r.status_code == 415 and "PDF lub Word" in r.json()["blad"]
-    assert client.post("/wnioski/analiza", files={"plik": ("w.docx", b"nie docx")}).status_code == 415
+    assert client.post("/dokumenty/odczyt", files={"plik": ("w.docx", b"nie docx")}).status_code == 415
     monkeypatch.setattr(settings.pliki, "max_mb", 0.0001)
-    assert client.post("/wnioski/analiza", files={"plik": ("w.txt", b"x" * 500)}).status_code == 413
+    assert client.post("/dokumenty/odczyt", files={"plik": ("w.txt", b"x" * 500)}).status_code == 413
+
+
+def test_serwer_odrzuca_niezamazany_pesel():
+    sid = nowa()["id"]
+    r = client.post(f"/sprawy/{sid}/dokumenty", data={"rodzaj": "ODPOWIEDZ"},
+                    files={"plik": ("odp.txt", "Jan, PESEL 44051401359".encode())})
+    assert r.status_code == 422 and "PESEL" in r.json()["blad"]
+    d = client.post(f"/sprawy/{sid}/dokumenty", data={"rodzaj": "ODPOWIEDZ"},
+                    files={"plik": ("odp.txt", "Jan, PESEL █████".encode())}).json()
+    assert client.patch(f"/dokumenty/{d['id']}", json={"tekst": "dowód ABC123456"}).status_code == 422
+    assert client.get(f"/sprawy/{sid}").json()["dokumenty"][0]["tekst"] == "Jan, PESEL █████"
 
 
 def test_dokument_do_sprawy():

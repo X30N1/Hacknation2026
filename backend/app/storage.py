@@ -70,6 +70,37 @@ CREATE VIRTUAL TABLE IF NOT EXISTS rag_fts USING fts5(
     text, content='rag_chunks', content_rowid='id',
     tokenize='unicode61 remove_diacritics 2'
 );
+
+-- Archiwum: wyszukiwanie pełnotekstowe spraw (przedmiot, wnioskodawca) i dokumentów
+-- (wyłącznie zanonimizowane teksty – oryginały nie trafiają do bazy). Synchronizacja triggerami.
+CREATE VIRTUAL TABLE IF NOT EXISTS sprawy_fts USING fts5(
+    przedmiot, content='sprawy', content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS sprawy_fts_ai AFTER INSERT ON sprawy BEGIN
+    INSERT INTO sprawy_fts (rowid, przedmiot) VALUES (new.id, new.przedmiot);
+END;
+CREATE TRIGGER IF NOT EXISTS sprawy_fts_ad AFTER DELETE ON sprawy BEGIN
+    INSERT INTO sprawy_fts (sprawy_fts, rowid, przedmiot) VALUES ('delete', old.id, old.przedmiot);
+END;
+CREATE TRIGGER IF NOT EXISTS sprawy_fts_au AFTER UPDATE OF przedmiot ON sprawy BEGIN
+    INSERT INTO sprawy_fts (sprawy_fts, rowid, przedmiot) VALUES ('delete', old.id, old.przedmiot);
+    INSERT INTO sprawy_fts (rowid, przedmiot) VALUES (new.id, new.przedmiot);
+END;
+CREATE VIRTUAL TABLE IF NOT EXISTS dokumenty_fts USING fts5(
+    tekst, content='dokumenty', content_rowid='id',
+    tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS dokumenty_fts_ai AFTER INSERT ON dokumenty BEGIN
+    INSERT INTO dokumenty_fts (rowid, tekst) VALUES (new.id, new.tekst);
+END;
+CREATE TRIGGER IF NOT EXISTS dokumenty_fts_ad AFTER DELETE ON dokumenty BEGIN
+    INSERT INTO dokumenty_fts (dokumenty_fts, rowid, tekst) VALUES ('delete', old.id, old.tekst);
+END;
+CREATE TRIGGER IF NOT EXISTS dokumenty_fts_au AFTER UPDATE OF tekst ON dokumenty BEGIN
+    INSERT INTO dokumenty_fts (dokumenty_fts, rowid, tekst) VALUES ('delete', old.id, old.tekst);
+    INSERT INTO dokumenty_fts (rowid, tekst) VALUES (new.id, new.tekst);
+END;
 """
 
 
@@ -110,6 +141,13 @@ class Store:
         cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(messages)")}
         if "context" not in cols:
             self._conn.execute("ALTER TABLE messages ADD COLUMN context TEXT NOT NULL DEFAULT '[]'")
+            self._conn.commit()
+        (wersja,) = self._conn.execute("PRAGMA user_version").fetchone()
+        if wersja < 1:
+            # indeksy archiwum dla danych sprzed wprowadzenia triggerów
+            self._conn.execute("INSERT INTO sprawy_fts (sprawy_fts) VALUES ('rebuild')")
+            self._conn.execute("INSERT INTO dokumenty_fts (dokumenty_fts) VALUES ('rebuild')")
+            self._conn.execute("PRAGMA user_version = 1")
             self._conn.commit()
 
     def close(self) -> None:

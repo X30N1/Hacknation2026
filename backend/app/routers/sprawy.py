@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 
+from app import anonimizacja
 from app.config import settings
 from app.sprawy import analiza, ekstrakcja, repo, terminy
 from app.sprawy.model import (
-    AnalizaWynik, Dokument, Odczyt, OdczytWniosku, DokumentPopraw, SprawaEdytuj, SprawaLista, SprawaSzczegoly,
+    Dokument, DokumentPopraw, Odczyt, OdczytWniosku, SprawaEdytuj, SprawaLista, SprawaSzczegoly,
     SprawaUtworz, TypZdarzenia, Zrodlo, ZdarzenieDodaj,
 )
 
@@ -70,16 +71,8 @@ async def utworz(body: SprawaUtworz, d: Dzis):
         raise HTTPException(409, f"Sprawa {body.znak} już istnieje.")
     if body.data_wplywu > d:
         raise HTTPException(422, "Data wpływu nie może być z przyszłości.")
-    if body.dokument_id is not None:
-        doc = repo.dokument(body.dokument_id)
-        if doc is None:
-            raise HTTPException(422, "Wskazany dokument nie istnieje.")
-        if doc.sprawa_id is not None:
-            raise HTTPException(409, "Dokument jest już przypisany do innej sprawy.")
     sid = repo.utworz_sprawe(body.znak, body.data_wplywu, body.wnioskodawca, body.przedmiot,
                              body.inicjaly)
-    if body.dokument_id is not None:
-        repo.przypisz_dokument(body.dokument_id, sid)
     return _sprawa(sid, d)
 
 
@@ -157,16 +150,12 @@ async def odczytaj_wniosek(d: Dzis, plik: UploadFile = File(...)):
     return OdczytWniosku(odczyt=_odczyt(nazwa, odczyt), propozycja=propozycja)
 
 
-@router.post("/wnioski/analiza", response_model=AnalizaWynik, deprecated=True)
-async def analizuj_wniosek(d: Dzis, plik: UploadFile = File(...)):
-    """PRZESTARZAŁE – zapisuje oryginał przed anonimizacją; użyj POST /wnioski/odczyt.
-    Odczyt wniosku (DOCX / PDF / OCR) i propozycja danych sprawy.
-    Dokument zapisuje się bez sprawy – przypisuje go POST /sprawy (dokument_id)."""
-    nazwa, dane, odczyt = await _wczytaj_plik(plik)
-    doc = repo.zapisz_dokument(nazwa, dane, "WNIOSEK", odczyt.metoda, odczyt.tekst,
-                               odczyt.ocr_pewnosc)
-    propozycja = await analiza.zaproponuj(nazwa, odczyt.tekst, d)
-    return AnalizaWynik(dokument=doc, propozycja=propozycja)
+def sprawdz_anonimizacje(tekst: str) -> None:
+    """Ostatnia linia obrony: nie zapisujemy tekstu z niezamazanym PESEL / numerem dowodu."""
+    if znalezione := anonimizacja.niezamazane_identyfikatory(tekst):
+        raise HTTPException(
+            422, f"Dokument zawiera niezamazane dane: {', '.join(znalezione)}. "
+                 "Zamaż je w kroku anonimizacji przed zapisem.")
 
 
 @router.post("/sprawy/{sid}/dokumenty", response_model=Dokument,
@@ -177,17 +166,20 @@ async def dodaj_dokument(
     rodzaj: str = Form("INNE", max_length=RODZAJ_MAX),
     wydzial: str | None = Form(None, max_length=WYDZIAL_MAX),
 ):
+    """Zapis dokumentu sprawy. Frontend wysyła tu wyłącznie tekst po anonimizacji (.txt)."""
     _sprawa(sid, d)
     nazwa, dane, odczyt = await _wczytaj_plik(plik)
+    sprawdz_anonimizacje(odczyt.tekst)
     return repo.zapisz_dokument(nazwa, dane, rodzaj.strip().upper() or "INNE", odczyt.metoda,
                                 odczyt.tekst, odczyt.ocr_pewnosc, sprawa_id=sid,
-                                wydzial=(wydzial or "").strip() or None)
+                                wydzial=(wydzial or "").strip().upper() or None)
 
 
 @router.patch("/dokumenty/{did}", response_model=Dokument)
 async def popraw_tekst(did: int, body: DokumentPopraw):
     if repo.dokument(did) is None:
         raise HTTPException(404, "Nie znaleziono dokumentu.")
+    sprawdz_anonimizacje(body.tekst)
     repo.popraw_tekst(did, body.tekst)
     return repo.dokument(did)
 

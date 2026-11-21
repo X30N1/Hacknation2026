@@ -1,4 +1,4 @@
-"""Sprawy demonstracyjne z datami względem dziś (jak DEMO w frontend/src/api/mock.js)."""
+"""Sprawy demonstracyjne z datami względem dziś – 10 wniosków testowych w różnych stanach."""
 from datetime import date, timedelta
 
 from app.sprawy import repo

@@ -1,4 +1,4 @@
-"""Kontrakt API spraw – zgodny z frontendem (frontend/src/api/client.js, mock.js).
+"""Kontrakt API spraw – zgodny z frontendem (frontend/src/api/client.js).
 Daty jako 'RRRR-MM-DD' (ISO)."""
 import re
 from datetime import date
@@ -123,7 +123,6 @@ class SprawaUtworz(_Wejscie):
     wnioskodawca: str = Field("", max_length=WNIOSKODAWCA_MAX)
     przedmiot: str = Field("", max_length=PRZEDMIOT_MAX)
     inicjaly: str | None = Field(None, max_length=INICJALY_MAX)
-    dokument_id: int | None = None
 
     @field_validator("znak")
     @classmethod
@@ -177,6 +176,59 @@ class OdczytWniosku(BaseModel):
     propozycja: Propozycja
 
 
-class AnalizaWynik(BaseModel):
-    dokument: Dokument
-    propozycja: Propozycja
+# ---------- archiwum, baza wiedzy, wydziały, projekt odpowiedzi ----------
+# Dokumenty bazy wiedzy nie należą do sprawy (sprawa_id = NULL).
+RODZAJE_WIEDZY = {
+    "USTAWA": "Ustawa / przepis",
+    "ZARZADZENIE": "Zarządzenie / instrukcja",
+    "WZOR": "Wzór pisma",
+    "ARCHIWUM": "Archiwalne pismo",
+}
+
+
+class PodobnaSprawa(BaseModel):
+    id: int
+    znak: str
+    przedmiot: str
+    data_wplywu: date
+    status: Status
+    wydzialy: list[str]        # wydziały, które odpowiadały / do których przekazano sprawę
+    fragment: str              # dopasowany fragment (z [ ] wokół trafionych słów)
+    ma_odpowiedz: bool         # czy w sprawie jest dokument odpowiedzi do wykorzystania
+
+
+class TrafienieArchiwum(BaseModel):
+    sprawa_id: int | None
+    znak: str | None
+    dokument_id: int | None
+    nazwa_pliku: str | None
+    rodzaj: str                # SPRAWA albo rodzaj dokumentu
+    data: date | None
+    fragment: str
+
+
+class WiedzaDokument(BaseModel):
+    id: int
+    rodzaj: str
+    nazwa_pliku: str
+    znaki: int
+    utworzono: str
+
+
+class SugestiaWydzialu(BaseModel):
+    skrot: str
+    nazwa: str
+    uzasadnienie: str
+    zrodlo: str                # ARCHIWUM | SLOWA_KLUCZOWE | LLM
+
+
+class SugestieWydzialow(BaseModel):
+    sugestie: list[SugestiaWydzialu]
+    wszystkie: list[dict[str, str]]  # pełna lista wydziałów i biur UMB (skrot, nazwa)
+
+
+class ProjektOdpowiedzi(BaseModel):
+    tekst: str
+    llm_uzyty: bool
+    zrodla: list[str]          # z czego powstał projekt – do weryfikacji przez urzędnika
+    uwagi: list[str] = []

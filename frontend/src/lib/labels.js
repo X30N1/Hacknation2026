@@ -30,6 +30,31 @@ export const ZDARZENIE = {
   BEZ_ROZPOZNANIA: 'Pozostawiono bez rozpoznania',
 }
 
+export const RODZAJ_DOKUMENTU = {
+  WNIOSEK: 'Wniosek',
+  ODP_WYDZIALU: 'Odpowiedź wydziału',
+  PROJEKT: 'Projekt odpowiedzi',
+  ODPOWIEDZ: 'Odpowiedź',
+  KWERENDA: 'Kwerenda',
+  WEZWANIE: 'Wezwanie do doprecyzowania',
+  INNE: 'Inny dokument',
+  // baza wiedzy
+  USTAWA: 'Ustawa / przepis',
+  ZARZADZENIE: 'Zarządzenie / instrukcja',
+  WZOR: 'Wzór pisma',
+  ARCHIWUM: 'Archiwalne pismo',
+  SPRAWA: 'Sprawa',
+}
+
+export const RODZAJE_W_SPRAWIE = ['ODP_WYDZIALU', 'WNIOSEK', 'ODPOWIEDZ', 'KWERENDA', 'WEZWANIE', 'INNE']
+export const RODZAJE_WIEDZY = ['USTAWA', 'ZARZADZENIE', 'WZOR', 'ARCHIWUM']
+
+export const ZRODLO_SUGESTII = {
+  ARCHIWUM: 'podobne sprawy',
+  LLM: 'model AI',
+  SLOWA_KLUCZOWE: 'słowa kluczowe',
+}
+
 export const METODA = {
   DOCX: 'Word',
   PDF_TEXT: 'PDF (warstwa tekstowa)',

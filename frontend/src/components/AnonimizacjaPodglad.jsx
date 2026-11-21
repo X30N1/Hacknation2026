@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { KATEGORIE, wykryj, zamaz } from '../lib/anonimizacja'
+import { KATEGORIE, ZASLONA, wykryj, zamaz } from '../lib/anonimizacja'
 
 // Przesunięcie zaznaczenia (Selection) w całym tekście dokumentu: każdy <span data-s> ma jeden węzeł tekstowy.
 function przesuniecie(wezel, offset) {
@@ -8,15 +8,17 @@ function przesuniecie(wezel, offset) {
   return el ? Number(el.dataset.s) + (wezel.nodeType === 3 ? offset : 0) : null
 }
 
-// Krok anonimizacji PRZED zapisem dokumentu. Podgląd tekstu z danymi do zamazania na szaro:
-// klik w szary fragment = nie zamazuj, zaznaczenie myszą + „Zamaż zaznaczony tekst” = dodaj ręcznie.
-// Rodzic dostaje przez onZmiana gotowy tekst zanonimizowany (null, dopóki trwa wyszukiwanie)
+// Krok anonimizacji PRZED zapisem dokumentu. Etap 1: dane do zamazania na szaro – klik w szary
+// fragment = nie zamazuj, zaznaczenie myszą + „Zamaż zaznaczony tekst” = dodaj ręcznie.
+// Etap 2 (po akceptacji urzędnika): te same dane na czarno – dokładnie to, co zostanie zapisane.
+// Rodzic dostaje przez onZmiana gotowy tekst zanonimizowany (null przed akceptacją)
 // i to on – a nie oryginał – trafia do bazy.
 export default function AnonimizacjaPodglad({ tekst, wnioskodawca, onZmiana }) {
   const [fragmenty, setFragmenty] = useState([])
   const [laduje, setLaduje] = useState(true)
   const [uwagi, setUwagi] = useState([])
   const [komunikat, setKomunikat] = useState('')
+  const [czarne, setCzarne] = useState(false)
   const kontener = useRef(null)
   const nextId = useRef(0)
 
@@ -38,9 +40,10 @@ export default function AnonimizacjaPodglad({ tekst, wnioskodawca, onZmiana }) {
 
   const wybrane = fragmenty.filter((f) => f.wybrany)
 
+  // Rodzic dostaje tekst do zapisu dopiero po akceptacji (etap 2) – wcześniej null = zapis zablokowany.
   useEffect(() => {
-    onZmiana(laduje ? null : zamaz(tekst, fragmenty.filter((f) => f.wybrany)))
-  }, [fragmenty, laduje, tekst, onZmiana])
+    onZmiana(laduje || !czarne ? null : zamaz(tekst, fragmenty.filter((f) => f.wybrany)))
+  }, [fragmenty, laduje, czarne, tekst, onZmiana])
 
   const segmenty = useMemo(() => {
     const out = []
@@ -85,11 +88,33 @@ export default function AnonimizacjaPodglad({ tekst, wnioskodawca, onZmiana }) {
 
   const ustawWszystkie = (wybrany) => setFragmenty((l) => l.map((f) => ({ ...f, wybrany })))
 
+  // Etap 2: po akceptacji zaznaczenia – dokument tak, jak zostanie zapisany (zamazane na czarno).
+  if (czarne) {
+    return (
+      <div className="anon">
+        <div className="anon-head">
+          <strong>Wersja po anonimizacji</strong>
+          <span className="muted">zamazano: {wybrane.length}</span>
+          <button type="button" className="btn btn-small" onClick={() => setCzarne(false)}>Wróć do zaznaczania</button>
+        </div>
+        <p className="hint">Tak dokument trafi do systemu. Czarne pola zastąpią dane – oryginału nie da się z nich odtworzyć.</p>
+        <pre className="doc-text readonly anon-text">
+          {segmenty.map((s) => (s.f?.wybrany
+            ? <span key={s.f.id} className="redacted" title={s.f.etykieta || KATEGORIE[s.f.kategoria]}>{ZASLONA}</span>
+            : <span key={`t${s.start}`}>{s.tekst}</span>))}
+        </pre>
+      </div>
+    )
+  }
+
   return (
     <div className="anon">
       <div className="anon-head">
         <strong>Anonimizacja przed zapisem</strong>
         <span className="muted">do zamazania: {wybrane.length} z {fragmenty.length}</span>
+        <button type="button" className="btn btn-small btn-primary" disabled={laduje} onClick={() => setCzarne(true)}>
+          Akceptuję – pokaż zamazane
+        </button>
       </div>
       <p className="hint">
         Do systemu trafi tylko ta wersja – szare fragmenty zostaną zamazane (klik = nie zamazuj). Danych, których

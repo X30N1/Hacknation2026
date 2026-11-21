@@ -81,7 +81,8 @@ Body JSON:
 - znak: str (wymagany, format jak wyżej; 409 gdy istnieje)
 - data_wplywu: str (wymagana, nie z przyszłości)
 - wnioskodawca: str, przedmiot: str, inicjaly: str | null
-- dokument_id: int | null (przestarzałe – dokument z `/wnioski/analiza`)
+
+Treść wniosku zapisuje się osobno, po anonimizacji: `POST /sprawy/{id}/dokumenty` (rodzaj WNIOSEK).
 
 Zwraca 201 + Sprawa (szczegóły).
 
@@ -144,19 +145,52 @@ Zwraca:
 
 ## POST /sprawy/{id}/dokumenty
 multipart/form-data: `plik`, `rodzaj` (domyślnie "INNE"), `wydzial` (opcjonalnie).
-Frontend wysyła tu wyłącznie zanonimizowany `.txt`, ale serwer tego nie weryfikuje.
+Frontend wysyła tu wyłącznie zanonimizowany `.txt`. Serwer odrzuca (422) tekst z niezamazanym
+numerem PESEL lub numerem dowodu – ostatnia linia obrony. Rodzaje używane przez frontend:
+WNIOSEK, ODP_WYDZIALU (z `wydzial`), PROJEKT, ODPOWIEDZ, KWERENDA, WEZWANIE, INNE.
 Zwraca 201 + Dokument.
 
-## POST /wnioski/analiza (przestarzałe)
-**Zapisuje oryginał przed anonimizacją** – nie używać, zastępuje go `POST /wnioski/odczyt`.
-multipart/form-data: `plik`. Zwraca `{ dokument: Dokument (sprawa_id = null), propozycja }`.
-Dokument przypisuje się do sprawy przez `dokument_id` w `POST /sprawy`.
-
 ## PATCH /dokumenty/{id}
-Body JSON: `{ "tekst": str }` – ręczna poprawka tekstu (np. po niepewnym OCR). Zwraca Dokument.
+Body JSON: `{ "tekst": str }` – ręczna poprawka tekstu (np. po niepewnym OCR). Ta sama blokada
+PESEL / dowodu co przy zapisie. Zwraca Dokument.
 
 ## GET /dokumenty/{id}/plik
-Oryginalny plik dokumentu.
+Zapisany plik dokumentu (zanonimizowany `.txt`).
+
+## GET /dokumenty/{id}/docx
+Tekst dokumentu jako plik Word (`Content-Disposition: attachment`).
+
+---
+
+# Archiwum, ścieżka, projekt odpowiedzi
+
+Działa lokalnie (SQLite FTS5), model językowy jest opcjonalny.
+
+## GET /sprawy/{id}/podobne?limit=5
+Podobne sprawy: przedmiot + treść zanonimizowanych dokumentów, ranking FTS5 łączony przez RRF,
+próg pokrycia ważonych (IDF) słów przedmiotu. Zwraca listę:
+`{ id, znak, przedmiot, data_wplywu, status, wydzialy: [str], fragment: str, ma_odpowiedz: bool }`.
+`fragment` zawiera trafione słowa w nawiasach kwadratowych: `…[odśnieżanie] ulic…`.
+
+## GET /sprawy/{id}/wydzialy
+`{ sugestie: [{ skrot, nazwa, uzasadnienie, zrodlo }], wszystkie: [{ skrot, nazwa }] }`.
+`zrodlo`: `ARCHIWUM` (odpowiadał w podobnych sprawach) | `LLM` (wybór z zamkniętej listy) |
+`SLOWA_KLUCZOWE`. Lista jednostek: BIP UM Bydgoszcz (wydziały i biura).
+
+## POST /sprawy/{id}/projekt
+Projekt pisma z odpowiedzi wydziałów (dokumenty ODP_WYDZIALU), z wzorem stylu z podobnych spraw
+i podstawami z bazy wiedzy. **Niczego nie zapisuje.** Dane wnioskodawcy nie trafiają do modelu.
+`{ tekst, llm_uzyty: bool, zrodla: [str], uwagi: [str] }`. Bez modelu – szablon pisma.
+
+## GET /archiwum/szukaj?q=fraza
+Sprawy, dokumenty spraw i baza wiedzy: `[{ sprawa_id, znak, dokument_id, nazwa_pliku, rodzaj, data, fragment }]`
+(`rodzaj` = SPRAWA albo rodzaj dokumentu).
+
+## Baza wiedzy
+- `GET /wiedza` → `[{ id, rodzaj, nazwa_pliku, znaki, utworzono }]`
+- `GET /wiedza/rodzaje` → `{ USTAWA, ZARZADZENIE, WZOR, ARCHIWUM: etykieta }`
+- `POST /wiedza` multipart `plik`, `rodzaj` → 201 + Dokument (`sprawa_id = null`); blokada PESEL / dowodu
+- `DELETE /wiedza/{id}` → 204 (np. stara wersja ustawy)
 
 ---
 

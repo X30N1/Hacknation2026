@@ -1,4 +1,4 @@
-"""Reguły terminów i statusu sprawy (źródło prawdy; frontend/src/api/mock.js ma uproszczoną kopię).
+"""Reguły terminów i statusu sprawy (źródło prawdy dla frontendu).
 
 - termin: 14 dni od wpływu (art. 13 ust. 1 UDIP),
 - wezwanie do doprecyzowania: bez nowego terminu wstrzymuje bieg, z nowym – ustawia go,

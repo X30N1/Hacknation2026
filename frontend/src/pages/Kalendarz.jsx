@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Flagi, PilnoscBadge, StatusBadge } from '../components/Badges'
-import { formatPL, weekdayPL } from '../lib/dates'
+import { addDays, addMonths, diffDays, formatPL, parseISO, todayISO, weekdayPL } from '../lib/dates'
 
 function Pozostalo({ s }) {
   if (s.termin_wstrzymany) return <span className="muted" title="Bieg terminu wstrzymany do czasu doprecyzowania">wstrzymany</span>
@@ -44,11 +44,63 @@ function Legenda() {
   )
 }
 
+const MIESIACE = ['styczeń', 'luty', 'marzec', 'kwiecień', 'maj', 'czerwiec', 'lipiec', 'sierpień',
+  'wrzesień', 'październik', 'listopad', 'grudzień']
+const DNI_TYG = ['pn', 'wt', 'śr', 'cz', 'pt', 'sb', 'nd']
+
+// Siatka miesiąca: każdy dzień pokazuje sprawy z terminem odpowiedzi w tym dniu (kolor = pilność).
+function WidokMiesiaca({ sprawy, miesiac, setMiesiac }) {
+  const navigate = useNavigate()
+  const dzis = todayISO()
+  const pierwszy = `${miesiac}-01`
+  const przesuniecie = (new Date(parseISO(pierwszy)).getUTCDay() + 6) % 7 // poniedziałek = 0
+  const start = addDays(pierwszy, -przesuniecie)
+  const ostatni = addDays(addMonths(pierwszy, 1), -1)
+  const tygodnie = Math.ceil((przesuniecie + diffDays(ostatni, pierwszy) + 1) / 7)
+  const poTerminie = {}
+  for (const s of sprawy) if (s.termin) (poTerminie[s.termin] ||= []).push(s)
+  const [r, m] = miesiac.split('-').map(Number)
+  const zmien = (n) => setMiesiac(addMonths(pierwszy, n).slice(0, 7))
+
+  return (
+    <div className="month">
+      <div className="month-nav">
+        <button type="button" className="btn btn-small" onClick={() => zmien(-1)} aria-label="Poprzedni miesiąc">←</button>
+        <strong>{MIESIACE[m - 1]} {r}</strong>
+        <button type="button" className="btn btn-small" onClick={() => zmien(1)} aria-label="Następny miesiąc">→</button>
+        <button type="button" className="btn btn-small" onClick={() => setMiesiac(dzis.slice(0, 7))}>Dziś</button>
+        <span className="muted">Dzień = termin odpowiedzi</span>
+      </div>
+      <div className="month-grid" role="grid">
+        {DNI_TYG.map((d) => <div key={d} className="month-dow" role="columnheader">{d}</div>)}
+        {Array.from({ length: tygodnie * 7 }, (_, i) => {
+          const dzien = addDays(start, i)
+          const lista = poTerminie[dzien] || []
+          return (
+            <div key={dzien} role="gridcell"
+              className={`month-day ${dzien.slice(0, 7) !== miesiac ? 'poza' : ''} ${dzien === dzis ? 'dzis' : ''}`}>
+              <div className="month-num">{Number(dzien.slice(8))}</div>
+              {lista.map((s) => (
+                <button key={s.id} type="button" className={`month-chip chip-${s.pilnosc}`}
+                  title={`${s.znak} – ${s.przedmiot}`} onClick={() => navigate(`/sprawy/${s.id}`)}>
+                  {s.nr}/{s.rok} {s.wnioskodawca}
+                </button>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function Kalendarz() {
   const [sprawy, setSprawy] = useState(null)
   const [blad, setBlad] = useState(null)
   const [rok, setRok] = useState('')
   const [tylkoOtwarte, setTylkoOtwarte] = useState(false)
+  const [widok, setWidok] = useState('tabela')
+  const [miesiac, setMiesiac] = useState(todayISO().slice(0, 7))
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -78,6 +130,10 @@ export default function Kalendarz() {
       <Podsumowanie sprawy={sprawy} />
 
       <div className="toolbar">
+        <div className="segmented" role="group" aria-label="Widok">
+          <button type="button" className={widok === 'tabela' ? 'on' : ''} aria-pressed={widok === 'tabela'} onClick={() => setWidok('tabela')}>Tabela</button>
+          <button type="button" className={widok === 'miesiac' ? 'on' : ''} aria-pressed={widok === 'miesiac'} onClick={() => setWidok('miesiac')}>Miesiąc</button>
+        </div>
         <label>
           Rok:{' '}
           <select value={rok} onChange={(e) => setRok(e.target.value)}>
@@ -92,6 +148,7 @@ export default function Kalendarz() {
         <Legenda />
       </div>
 
+      {widok === 'miesiac' ? <WidokMiesiaca sprawy={widoczne} miesiac={miesiac} setMiesiac={setMiesiac} /> : (
       <div className="table-wrap">
         <table className="cal">
           <thead>
@@ -140,6 +197,7 @@ export default function Kalendarz() {
           </tbody>
         </table>
       </div>
+      )}
     </section>
   )
 }

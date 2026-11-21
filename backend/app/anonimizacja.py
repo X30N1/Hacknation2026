@@ -130,9 +130,11 @@ def _wzorce(tekst: str) -> list[_Traf]:
 
 # ---------- wnioskodawca ze sprawy ----------
 # osoby prawne nie podlegają anonimizacji
+# (\b po kropce nigdy nie pasuje na końcu nazwy – „Budowlanka S.A.” – stąd skróty osobno)
 OSOBA_PRAWNA = re.compile(
-    r"\b(sp\.|s\.a\.|spółk\w*|fundacj\w*|stowarzysz\w*|redakcj\w*|gazet\w*|portal\w*|"
-    r"związ\w*|instytut\w*|kancelari\w*|partia|urząd|gmina|ośrodek|centrum)\b", re.I)
+    r"\b(?:sp\.|s\.\s?a\.|sp\.\s?j\.|sp\.\s?k\.)|\b(?:spółk\w*|fundacj\w*|stowarzysz\w*|redakcj\w*|gazet\w*|"
+    r"portal\w*|związ\w*|instytut\w*|kancelari\w*|partia|urząd|gmina|ośrodek|centrum|rada|szkoła|"
+    r"zarząd|towarzystw\w*)\b", re.I)
 
 
 def _wnioskodawca(tekst: str, wnioskodawca: str | None) -> list[_Traf]:
@@ -252,6 +254,26 @@ def _scal(tekst: str, trafienia: list[_Traf]) -> list[Fragment]:
                               etykieta=KATEGORIE[t.kategoria], tekst=tekst[t.start:t.end],
                               zrodlo=t.zrodlo, powod=t.powod))
     return wynik
+
+
+ZASLONA = "█████"  # jak frontend/src/lib/anonimizacja.js – stała długość nie zdradza zamazanego tekstu
+# Identyfikatory, których nie da się uzasadnić w dokumencie udostępnianym publicznie – serwer odrzuca
+# zapis tekstu, w którym zostały niezamazane (ostatnia linia obrony, gdy anonimizacja we froncie zawiedzie).
+BLOKUJACE = ("PESEL", "DOWOD")
+
+
+def niezamazane_identyfikatory(tekst: str) -> list[str]:
+    return sorted({KATEGORIE[t.kategoria] for t in _wzorce(tekst) if t.kategoria in BLOKUJACE})
+
+
+def zamaz_automatycznie(tekst: str, wnioskodawca: str | None = None) -> str:
+    """Zamazuje wszystko, co wykryją wzorce i wnioskodawca sprawy – bez LLM i bez decyzji urzędnika.
+    Tylko dla importu archiwum (materiały testowe UMB); w aplikacji decyduje urzędnik."""
+    out, poz = [], 0
+    for f in _scal(tekst, _wzorce(tekst) + _wnioskodawca(tekst, wnioskodawca)):
+        out += [tekst[poz:f.start], ZASLONA]
+        poz = f.end
+    return "".join(out) + tekst[poz:]
 
 
 async def zaproponuj(tekst: str, wnioskodawca: str | None = None, llm: bool = True) -> Propozycje:

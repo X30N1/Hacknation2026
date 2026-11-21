@@ -85,7 +85,7 @@ class Settings(BaseModel):
 
 
 def load_settings(path: Path = CONFIG_PATH) -> Settings:
-    if not path.exists():
+    if not path.is_file():  # brak pliku (albo katalog utworzony przez montowanie w Dockerze)
         return Settings()
     with path.open("rb") as f:
         return Settings.model_validate(tomllib.load(f))

@@ -11,7 +11,7 @@ from app.sprawy.model import ZNAK_W_TEKSCIE_RE, Propozycja
 
 log = logging.getLogger(__name__)
 
-PRZEDMIOT_PROPOZYCJA_MAX = 160  # TODO: limit – jak w frontend/src/api/mock.js
+PRZEDMIOT_PROPOZYCJA_MAX = 160  # TODO: limit – propozycja „przedmiotu” w formularzu wniosku
 TEKST_DO_LLM_MAX = 6000         # TODO: limit – znaki wniosku wysyłane do LLM
 
 PROMPT = """\

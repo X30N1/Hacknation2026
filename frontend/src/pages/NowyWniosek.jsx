@@ -139,6 +139,9 @@ export default function NowyWniosek() {
               </button>
             </div>
             {edycjaTekstu && <p className="hint">Zakończ poprawianie tekstu, aby przejść do anonimizacji.</p>}
+            {!edycjaTekstu && zanonimizowany == null && (
+              <p className="hint">Zaakceptuj anonimizację treści („Akceptuję – pokaż zamazane”), aby zarejestrować wniosek.</p>
+            )}
           </div>
         </form>
       )}

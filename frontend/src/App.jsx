@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Route, Routes } from 'react-router-dom'
 import { api } from './api/client'
+import Archiwum from './pages/Archiwum'
 import Kalendarz from './pages/Kalendarz'
 import NowyWniosek from './pages/NowyWniosek'
 import Sprawa from './pages/Sprawa'
@@ -8,6 +9,7 @@ import Sprawa from './pages/Sprawa'
 const NAV = [
   { to: '/', label: 'Kalendarz', end: true },
   { to: '/nowy', label: 'Nowy wniosek' },
+  { to: '/archiwum', label: 'Archiwum i wiedza' },
 ]
 
 function NieZnaleziono() {
@@ -67,6 +69,7 @@ export default function App() {
           <Route path="/" element={<Kalendarz />} />
           <Route path="/nowy" element={<NowyWniosek />} />
           <Route path="/sprawy/:id" element={<Sprawa />} />
+          <Route path="/archiwum" element={<Archiwum />} />
           <Route path="*" element={<NieZnaleziono />} />
         </Routes>
       </main>

@@ -51,7 +51,6 @@ export const api = {
 
   sprawy: (filtry) => http('GET', '/sprawy' + qs(filtry)),
   sprawa: (id) => http('GET', `/sprawy/${id}`),
-  analizujWniosek: (plik) => http('POST', '/wnioski/analiza', form({ plik })),
   // Odczyt tekstu BEZ zapisu – oryginał trafia na serwer tylko na czas OCR; do bazy idzie wersja zanonimizowana.
   odczytajWniosek: (plik) => http('POST', '/wnioski/odczyt', form({ plik })),
   odczytajDokument: (plik) => http('POST', '/dokumenty/odczyt', form({ plik })),
@@ -61,6 +60,17 @@ export const api = {
   dodajDokument: (id, plik, rodzaj, wydzial) =>
     http('POST', `/sprawy/${id}/dokumenty`, form({ plik, rodzaj, wydzial })),
   poprawTekst: (dokumentId, tekst) => http('PATCH', `/dokumenty/${dokumentId}`, { tekst }),
-  anonimizacjaDokumentu: (dokumentId) => http('GET', `/dokumenty/${dokumentId}/anonimizacja`),
   anonimizacjaTekstu: (tekst, wnioskodawca) => http('POST', '/anonimizacja', { tekst, wnioskodawca }),
+  pobierzDocx: (dokumentId) => http('GET', `/dokumenty/${dokumentId}/docx`),
+
+  // archiwum, ścieżka (wydziały), projekt odpowiedzi
+  podobneSprawy: (id) => http('GET', `/sprawy/${id}/podobne`),
+  sugestieWydzialow: (id) => http('GET', `/sprawy/${id}/wydzialy`),
+  projektOdpowiedzi: (id) => http('POST', `/sprawy/${id}/projekt`),
+  szukajWArchiwum: (q) => http('GET', '/archiwum/szukaj' + qs({ q })),
+
+  // baza wiedzy: ustawy, zarządzenia, wzory pism, archiwalne pisma
+  wiedza: () => http('GET', '/wiedza'),
+  dodajWiedze: (plik, rodzaj) => http('POST', '/wiedza', form({ plik, rodzaj })),
+  usunWiedze: (id) => http('DELETE', `/wiedza/${id}`),
 }
