@@ -1,15 +1,16 @@
-"""Archiwum, baza wiedzy, ścieżka (wydziały), projekt odpowiedzi i eksport pism."""
+"""Archiwum, baza wiedzy, ścieżka (wydziały), projekty pism i eksport pism."""
+import asyncio
 import io
 import re
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 
 from app.routers.sprawy import Dzis, _sprawa, _wczytaj_plik
 from app.sprawy import archiwum, projekt, repo, wydzialy
 from app.sprawy.model import (
-    RODZAJE_WIEDZY, Dokument, PodobnaSprawa, ProjektOdpowiedzi, SugestieWydzialow, TrafienieArchiwum,
+    RODZAJE_WIEDZY, Dokument, DraftPisma, PodobnaSprawa, ProjektOdpowiedzi, SugestieWydzialow, TrafienieArchiwum,
     WiedzaDokument,
 )
 
@@ -32,11 +33,36 @@ async def sugestie_wydzialow(sid: int, d: Dzis):
     return await wydzialy.zaproponuj(sid, d)
 
 
+async def do_rozlaczenia(request: Request, zadanie, co: float = 0.5):
+    """Wynik korutyny; gdy klient przerwie zapytanie (przycisk „Anuluj” – fetch abort), generacja
+    w LLM jest przerywana (zamknięte połączenie z modelem), a nie liczy się dalej w tle."""
+    task = asyncio.ensure_future(zadanie)
+    try:
+        while True:
+            done, _ = await asyncio.wait({task}, timeout=co)
+            if done:
+                return task.result()
+            if await request.is_disconnected():
+                task.cancel()
+                raise HTTPException(499, "Anulowano.")
+    finally:
+        if not task.done():
+            task.cancel()
+
+
 @router.post("/sprawy/{sid}/projekt", response_model=ProjektOdpowiedzi)
-async def projekt_odpowiedzi(sid: int, d: Dzis):
-    """Projekt pisma z odpowiedzi wydziałów. Niczego nie zapisuje – urzędnik sprawdza projekt,
-    anonimizuje go i dopiero wtedy zapisuje (POST /sprawy/{id}/dokumenty, rodzaj PROJEKT)."""
-    return await projekt.przygotuj(_sprawa(sid, d), d)
+async def projekt_odpowiedzi(sid: int, d: Dzis, request: Request):
+    """Projekt odpowiedzi na wniosek (= /draft z rodzajem ODPOWIEDZ)."""
+    return await do_rozlaczenia(request, projekt.przygotuj(_sprawa(sid, d), d))
+
+
+@router.post("/sprawy/{sid}/draft", response_model=ProjektOdpowiedzi)
+async def draft_pisma(sid: int, body: DraftPisma, d: Dzis, request: Request):
+    """Projekt pisma (odpowiedź, wezwanie, zapytanie do wydziałów, przedłużenie). Niczego nie zapisuje –
+    urzędnik sprawdza projekt, anonimizuje go i dopiero wtedy zapisuje (POST /sprawy/{id}/dokumenty)."""
+    s = _sprawa(sid, d)
+    return await do_rozlaczenia(
+        request, projekt.przygotuj(s, d, body.rodzaj, body.wydzialy, body.nowy_termin))
 
 
 @router.get("/archiwum/szukaj", response_model=list[TrafienieArchiwum])

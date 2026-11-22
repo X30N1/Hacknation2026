@@ -56,6 +56,6 @@ propozycje wydziałów i redakcję projektu pisma.
 | Anonimizacja | Każdy dokument przed zapisem: dane na szaro → po akceptacji na czarno; do bazy trafia tylko wersja zanonimizowana, serwer odrzuca niezamazany PESEL / dowód |
 | Przeszukiwanie archiwum | Sprawa → „Podobne sprawy z archiwum”; Archiwum i wiedza → wyszukiwarka |
 | Wskazywanie ścieżki | Sprawa → „Sugerowane wydziały” (lista jednostek z BIP UMB, uzasadnienie) |
-| Projekt odpowiedzi | Odpowiedź wydziału – wgraj plik → Przygotuj projekt odpowiedzi → sprawdzenie → anonimizacja → .docx / .txt |
+| Projekt odpowiedzi | „Co dalej?” → okno wyboru: A. prześlij plik albo B. draft AI (odpowiedź, wezwanie do doprecyzowania, zapytanie do wydziałów, przedłużenie terminu) → sprawdzenie → anonimizacja → zapis i odznaczenie akcji w historii; .docx / .txt |
 | „Uczenie się” na ustawach i archiwum | Archiwum i wiedza → baza wiedzy (dodawanie, usuwanie starych wersji) |
 | Brak wysyłki i integracji | Aplikacja tylko zapisuje, co zrobił urzędnik; pliki pobiera on sam |

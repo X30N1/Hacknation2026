@@ -218,13 +218,14 @@ def podobne(sid: int, dzis: date, limit: int = 5) -> list[PodobnaSprawa]:
     return wynik
 
 
-def odpowiedzi_podobnych(sid: int, dzis: date, limit: int = 2) -> list[tuple[str, str]]:
-    """(znak, tekst) odpowiedzi z najbardziej podobnych spraw – wzór stylu dla projektu pisma."""
+def pisma_podobnych(sid: int, dzis: date, rodzaje: tuple[str, ...] = ("ODPOWIEDZ", "PROJEKT"),
+                    limit: int = 2) -> list[tuple[str, str]]:
+    """(znak, tekst) pism danego rodzaju z najbardziej podobnych spraw – wzór stylu dla projektu pisma."""
     out = []
     for p in podobne(sid, dzis, limit=6):
         r = store.conn.execute(
-            "SELECT tekst FROM dokumenty WHERE sprawa_id = ? AND rodzaj IN ('ODPOWIEDZ', 'PROJEKT')"
-            " ORDER BY id DESC LIMIT 1", (p.id,),
+            "SELECT tekst FROM dokumenty WHERE sprawa_id = ? AND rodzaj IN ({}) ORDER BY id DESC LIMIT 1"
+            .format(",".join("?" * len(rodzaje))), (p.id, *rodzaje),
         ).fetchone()
         if r and r["tekst"].strip():
             out.append((p.znak, r["tekst"]))

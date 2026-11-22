@@ -218,6 +218,20 @@ class SugestieWydzialow(BaseModel):
     wszystkie: list[dict[str, str]]  # pełna lista wydziałów i biur UMB (skrot, nazwa)
 
 
+class RodzajPisma(StrEnum):
+    """Projekty pism przygotowywane przez system (POST /sprawy/{id}/draft)."""
+    ODPOWIEDZ = "ODPOWIEDZ"          # odpowiedź na wniosek
+    WEZWANIE = "WEZWANIE"            # wezwanie do doprecyzowania
+    PRZEKAZANIE = "PRZEKAZANIE"      # zapytanie do wydziałów
+    PRZEDLUZENIE = "PRZEDLUZENIE"    # zawiadomienie o przedłużeniu terminu
+
+
+class DraftPisma(_Wejscie):
+    rodzaj: RodzajPisma
+    wydzialy: list[str] = Field([], max_length=20)
+    nowy_termin: date | None = None
+
+
 class ProjektOdpowiedzi(BaseModel):
     tekst: str
     llm_uzyty: bool

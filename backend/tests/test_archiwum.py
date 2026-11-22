@@ -81,6 +81,57 @@ def test_wyszukiwarka_i_baza_wiedzy():
     assert client.get("/archiwum/szukaj", params={"q": "terminie zwłoki"}).json() == []
 
 
+def test_drafty_pism_z_szablonu():
+    sid = sprawa(11, "Wykaz dotacji dla fundacji")
+    dokument(sid, "Wnoszę o wykaz dotacji udzielonych fundacjom w 2025 r.")
+    draft = lambda **b: client.post(f"/sprawy/{sid}/draft", json=b)  # noqa: E731
+
+    w = draft(rodzaj="WEZWANIE").json()
+    assert w["tekst"].startswith("PROJEKT – wymaga weryfikacji urzędnika") and "Jan Testowy" in w["tekst"]
+    assert "doprecyzowanie" in w["tekst"] and "7 dni" in w["tekst"] and w["llm_uzyty"] is False
+    assert any("Wniosek" in z for z in w["zrodla"])
+
+    p = draft(rodzaj="PRZEKAZANIE", wydzialy=["wgk"]).json()["tekst"]
+    assert "Do:" in p and "Jan Testowy" not in p  # pismo wewnętrzne – bez danych wnioskodawcy
+    assert "termin ustawowy" in p
+    assert any("Nie wskazano wydziałów" in u for u in draft(rodzaj="PRZEKAZANIE").json()["uwagi"])
+
+    k = draft(rodzaj="PRZEDLUZENIE", nowy_termin="2027-01-09").json()["tekst"]
+    assert "art. 13 ust. 2" in k and "09.01.2027" in k
+
+    assert "brak wgranych odpowiedzi" in draft(rodzaj="ODPOWIEDZ").json()["tekst"]
+    assert draft(rodzaj="NIEZNANY").status_code == 422
+    assert client.get(f"/sprawy/{sid}").json()["status"] == "NOWY"  # draft niczego nie zapisuje
+
+
+def test_anulowanie_draftu_przerywa_generacje():
+    import asyncio
+
+    from app.routers.archiwum import do_rozlaczenia
+    from fastapi import HTTPException
+
+    class Rozlaczony:
+        async def is_disconnected(self):
+            return True
+
+    przerwana = []
+
+    async def dlugo():
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            przerwana.append(True)
+            raise
+
+    async def test():
+        try:
+            await do_rozlaczenia(Rozlaczony(), dlugo(), co=0.01)
+        except HTTPException as exc:
+            return exc.status_code
+
+    assert asyncio.run(test()) == 499 and przerwana == [True]
+
+
 def test_baza_wiedzy_bez_anonimizacji():
     tekst = "Archiwalne pismo do Jana Kowalskiego, PESEL 44051401359."
     r = client.post("/wiedza", data={"rodzaj": "ARCHIWUM"}, files={"plik": ("pismo.txt", tekst.encode())})

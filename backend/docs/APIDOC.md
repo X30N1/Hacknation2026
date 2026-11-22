@@ -190,7 +190,7 @@ Zwraca:
 multipart/form-data: `plik`, `rodzaj` (domyślnie "INNE"), `wydzial` (opcjonalnie).
 Frontend wysyła tu wyłącznie zanonimizowany `.txt`. Serwer odrzuca (422) tekst z niezamazanym
 numerem PESEL lub numerem dowodu – ostatnia linia obrony. Rodzaje używane przez frontend:
-WNIOSEK, ODP_WYDZIALU (z `wydzial`), PROJEKT, ODPOWIEDZ, KWERENDA, WEZWANIE, INNE.
+WNIOSEK, DOPRECYZOWANIE, ZAPYTANIE (do wydziału), ODP_WYDZIALU (z `wydzial`), PROJEKT, ODPOWIEDZ, KWERENDA, WEZWANIE, INNE.
 Zwraca 201 + Dokument.
 
 ## PATCH /dokumenty/{id}
@@ -217,10 +217,19 @@ próg pokrycia ważonych (IDF) słów przedmiotu. Zwraca listę:
 `zrodlo`: `ARCHIWUM` (odpowiadał w podobnych sprawach) | `LLM` (wybór z zamkniętej listy) |
 `SLOWA_KLUCZOWE`. Lista jednostek: BIP UM Bydgoszcz (wydziały i biura).
 
-## POST /sprawy/{id}/projekt
-Projekt pisma z odpowiedzi wydziałów (dokumenty ODP_WYDZIALU), z wzorem stylu z podobnych spraw
-i podstawami z bazy wiedzy. **Niczego nie zapisuje.** Dane wnioskodawcy nie trafiają do modelu.
+## POST /sprawy/{id}/draft
+Projekt pisma (draft AI) `{ rodzaj, wydzialy?: [str], nowy_termin?: RRRR-MM-DD }`:
+- `ODPOWIEDZ` – odpowiedź na wniosek z odpowiedzi wydziałów (dokumenty ODP_WYDZIALU),
+- `WEZWANIE` – wezwanie do doprecyzowania (pytania o niejasne części wniosku, 7 dni),
+- `PRZEKAZANIE` – wewnętrzne zapytanie do wydziałów (`wydzialy`, a gdy brak – z historii sprawy),
+- `PRZEDLUZENIE` – zawiadomienie o przedłużeniu terminu (art. 13 ust. 2 UDIP, `nowy_termin`).
+
+Materiały: wniosek i doprecyzowanie (DOPRECYZOWANIE), pisma tego samego rodzaju z podobnych spraw
+(wzór stylu) i podstawy z bazy wiedzy. **Niczego nie zapisuje.** Dane wnioskodawcy nie trafiają do modelu.
 `{ tekst, llm_uzyty: bool, zrodla: [str], uwagi: [str] }`. Bez modelu – szablon pisma.
+Przerwanie zapytania przez klienta (np. „Anuluj” – abort) przerywa też generację w modelu.
+
+`POST /sprawy/{id}/projekt` = `draft` z rodzajem `ODPOWIEDZ` (zgodność wsteczna).
 
 ## GET /archiwum/szukaj?q=fraza
 Sprawy, dokumenty spraw i baza wiedzy: `[{ sprawa_id, znak, dokument_id, nazwa_pliku, rodzaj, data, fragment }]`

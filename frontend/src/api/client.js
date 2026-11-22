@@ -6,8 +6,8 @@ function qs(params = {}) {
   return p.length ? '?' + new URLSearchParams(p).toString() : ''
 }
 
-async function http(method, path, body) {
-  const opts = { method, headers: {} }
+async function http(method, path, body, signal) {
+  const opts = { method, headers: {}, signal }
   if (body instanceof FormData) opts.body = body
   else if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json'
@@ -17,7 +17,8 @@ async function http(method, path, body) {
   let res
   try {
     res = await fetch('/api' + path, opts)
-  } catch {
+  } catch (e) {
+    if (e?.name === 'AbortError') throw e // anulowane przez użytkownika (AbortController)
     throw new ApiError('Brak połączenia z serwerem aplikacji. Sprawdź, czy backend jest uruchomiony.', 0)
   }
   // Sesja wygasła / wylogowano na innym urządzeniu -> App pokazuje ekran logowania.
@@ -92,6 +93,8 @@ export const api = {
   podobneSprawy: (id) => http('GET', `/sprawy/${id}/podobne`),
   sugestieWydzialow: (id) => http('GET', `/sprawy/${id}/wydzialy`),
   projektOdpowiedzi: (id) => http('POST', `/sprawy/${id}/projekt`),
+  // projekt pisma: { rodzaj: ODPOWIEDZ | WEZWANIE | PRZEKAZANIE | PRZEDLUZENIE, wydzialy?, nowy_termin? }
+  draftPisma: (id, dane, signal) => http('POST', `/sprawy/${id}/draft`, dane, signal),
   szukajWArchiwum: (q) => http('GET', '/archiwum/szukaj' + qs({ q })),
 
   // baza wiedzy: ustawy, zarządzenia, wzory pism, archiwalne pisma

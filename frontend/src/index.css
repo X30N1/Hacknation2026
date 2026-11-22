@@ -276,3 +276,28 @@ pre.doc-text.readonly.czytnik-tekst { max-height: 70vh; }
 .btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--primary); cursor: pointer; text-align: left; text-decoration: underline; }
 .btn-link:hover { color: var(--primary-hover); }
 tr.wiersz-aktywny td { background: var(--info-bg); }
+
+/* okno wyboru akcji: A. plik / B. draft AI / tylko historia */
+dialog.okno {
+  border: 0; border-radius: 12px; padding: 0; width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+dialog.okno::backdrop { background: rgba(20, 28, 40, 0.45); }
+.okno-tresc { padding: 20px; display: grid; gap: 10px; }
+.okno-tresc h2 { margin: 0 0 4px; }
+.okno-pytanie { margin: 8px 0 0; font-weight: 600; }
+.warianty { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.wariant {
+  display: grid; gap: 4px; align-content: start; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+}
+.wariant:hover:not(:disabled), .wariant:focus-visible { border-color: var(--primary); background: var(--info-bg); }
+.wariant:disabled { opacity: 0.55; cursor: not-allowed; }
+.wariant-litera {
+  width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center;
+  background: var(--primary); color: #fff; font-weight: 700;
+}
+/* oczekiwanie na draft AI (jak przy odczycie wniosku) */
+.czekanie { border: 2px dashed var(--border); border-radius: 12px; padding: 32px 24px; text-align: center; }
+.czekanie p { margin: 0 0 8px; }

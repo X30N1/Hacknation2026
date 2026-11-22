@@ -37,6 +37,8 @@ export const RODZAJ_DOKUMENTU = {
   ODPOWIEDZ: 'Odpowiedź',
   KWERENDA: 'Kwerenda',
   WEZWANIE: 'Wezwanie do doprecyzowania',
+  DOPRECYZOWANIE: 'Doprecyzowanie wniosku',
+  ZAPYTANIE: 'Zapytanie do wydziału',
   INNE: 'Inny dokument',
   // baza wiedzy
   USTAWA: 'Ustawa / przepis',
@@ -46,7 +48,7 @@ export const RODZAJ_DOKUMENTU = {
   SPRAWA: 'Sprawa',
 }
 
-export const RODZAJE_W_SPRAWIE = ['ODP_WYDZIALU', 'WNIOSEK', 'ODPOWIEDZ', 'KWERENDA', 'WEZWANIE', 'INNE']
+export const RODZAJE_W_SPRAWIE = ['ODP_WYDZIALU', 'WNIOSEK', 'DOPRECYZOWANIE', 'ZAPYTANIE', 'ODPOWIEDZ', 'KWERENDA', 'WEZWANIE', 'INNE']
 export const RODZAJE_WIEDZY = ['USTAWA', 'ZARZADZENIE', 'WZOR', 'ARCHIWUM']
 
 export const ZRODLO_SUGESTII = {
