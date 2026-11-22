@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS sesje (
     utworzono      TEXT NOT NULL,
     wygasa         TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ustawienia (         -- ustawienia zmieniane w aplikacji (JSON)
+    klucz   TEXT PRIMARY KEY,
+    wartosc TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS dokumenty (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     sprawa_id   INTEGER REFERENCES sprawy(id) ON DELETE SET NULL,  -- NULL do zatwierdzenia sprawy

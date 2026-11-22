@@ -69,11 +69,10 @@ llm = true
 
 [auth]
 # Przy pierwszym uruchomieniu powstaje konto admin / admin – hasło trzeba zmienić przy pierwszym logowaniu.
-# Drugi składnik (aplikacja TOTP albo klucz sprzętowy FIDO2/WebAuthn) obowiązkowy dla wszystkich.
-wymagaj_2fa = true
+# Wymóg drugiego składnika (TOTP / klucz FIDO2) i minimalną długość hasła ustawia administrator
+# w aplikacji (Użytkownicy → Ustawienia bezpieczeństwa). Domyślnie oba wyłączone.
 sesja_godziny = 10            # sesja po pełnym zalogowaniu
 sesja_wstepna_minuty = 15     # czas na zmianę hasła / drugi składnik po podaniu hasła
-min_dlugosc_hasla = 10
 max_prob = 5                  # nieudane próby (hasło lub kod) przed blokadą konta
 blokada_minut = 15
 # true za reverse proxy z HTTPS (ciasteczko sesji tylko przez TLS)

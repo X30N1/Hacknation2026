@@ -98,11 +98,10 @@ class AnonimizacjaSettings(BaseModel):
 
 
 class AuthSettings(BaseModel):
-    # Drugi składnik (aplikacja TOTP albo klucz sprzętowy FIDO2/WebAuthn) obowiązkowy dla wszystkich.
-    wymagaj_2fa: bool = True
+    # Wymóg drugiego składnika i minimalna długość hasła: ustawienia administratora w aplikacji
+    # (app/auth/polityka.py), nie w tym pliku.
     sesja_godziny: float = Field(10, gt=0)          # sesja po pełnym zalogowaniu
     sesja_wstepna_minuty: float = Field(15, gt=0)   # na zmianę hasła / drugi składnik po haśle
-    min_dlugosc_hasla: int = Field(10, ge=8)
     max_prob: int = Field(5, ge=1)                  # nieudane logowania przed blokadą konta
     blokada_minut: float = Field(15, gt=0)
     # Ciasteczko tylko przez HTTPS – włącz za reverse proxy z TLS.

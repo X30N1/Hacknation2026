@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 
-export default function ZmianaHasla({ minDlugosc = 10, onGotowe, przycisk = 'Zmień hasło' }) {
+export default function ZmianaHasla({ minDlugosc = 0, onGotowe, przycisk = 'Zmień hasło' }) {
   const [stare, setStare] = useState('')
   const [nowe, setNowe] = useState('')
   const [powtorz, setPowtorz] = useState('')
@@ -28,7 +28,7 @@ export default function ZmianaHasla({ minDlugosc = 10, onGotowe, przycisk = 'Zmi
       <label className="field">Obecne hasło
         <input type="password" autoComplete="current-password" required value={stare} onChange={(e) => setStare(e.target.value)} />
       </label>
-      <label className="field">Nowe hasło (min. {minDlugosc} znaków)
+      <label className="field">Nowe hasło{minDlugosc > 0 && ` (min. ${minDlugosc} znaków)`}
         <input type="password" autoComplete="new-password" required minLength={minDlugosc} value={nowe}
           onChange={(e) => setNowe(e.target.value)} />
       </label>

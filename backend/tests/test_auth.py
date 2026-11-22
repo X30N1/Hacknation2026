@@ -3,7 +3,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from app.auth import repo, totp
+from app.auth import polityka, repo, totp
 from app.config import settings
 from main import app
 
@@ -22,8 +22,14 @@ def zaloguj(c: TestClient, login="admin", haslo="admin"):
     return c.post("/auth/login", json={"login": login, "haslo": haslo})
 
 
+def scisle_zasady() -> None:
+    """Ustawienia bezpieczeństwa włączone przez administratora (domyślnie wyłączone)."""
+    polityka.zapisz(polityka.Polityka(wymagaj_2fa=True, min_dlugosc_hasla=10))
+
+
 def admin_z_totp(c: TestClient) -> str:
-    """Pełne pierwsze logowanie administratora; zwraca sekret TOTP."""
+    """Pełne pierwsze logowanie administratora (przy włączonym 2FA); zwraca sekret TOTP."""
+    scisle_zasady()
     repo.zapewnij_admina()
     assert zaloguj(c).json()["stan"] == "ZMIEN_HASLO"
     assert c.post("/auth/haslo", json={"stare": "admin", "nowe": NOWE}).json()["stan"] == "KONFIGURUJ_2FA"
@@ -33,6 +39,7 @@ def admin_z_totp(c: TestClient) -> str:
 
 
 def test_admin_startowy_i_pierwsze_logowanie():
+    scisle_zasady()
     assert repo.zapewnij_admina() is True
     assert repo.zapewnij_admina() is False  # tylko przy pustej bazie
     c = klient()
@@ -87,13 +94,46 @@ def test_blokada_po_nieudanych_probach(monkeypatch):
     assert zaloguj(c, login="nieistnieje").status_code == 401  # ten sam komunikat co złe hasło
 
 
-def test_bez_wymogu_2fa(monkeypatch):
-    monkeypatch.setattr(settings.auth, "wymagaj_2fa", False)
+def test_domyslnie_bez_2fa_i_min_dlugosci():
     repo.zapewnij_admina()
     c = klient()
-    zaloguj(c)
-    assert c.post("/auth/haslo", json={"stare": "admin", "nowe": NOWE}).json()["stan"] == "OK"
+    r = zaloguj(c).json()
+    assert r["stan"] == "ZMIEN_HASLO" and r["wymagaj_2fa"] is False and r["min_dlugosc_hasla"] == 0
+    assert c.post("/auth/haslo", json={"stare": "admin", "nowe": ""}).status_code == 422  # puste nigdy
+    assert c.post("/auth/haslo", json={"stare": "admin", "nowe": "admin"}).status_code == 422  # startowe nigdy
+    assert c.post("/auth/haslo", json={"stare": "admin", "nowe": "abc"}).json()["stan"] == "OK"
     assert c.get("/sprawy").status_code == 200
+    assert c.post("/uzytkownicy", json={"login": "jan", "haslo": "x"}).status_code == 201
+
+
+def test_ustawienia_bezpieczenstwa_administratora():
+    repo.zapewnij_admina()
+    admin = klient()
+    zaloguj(admin)
+    admin.post("/auth/haslo", json={"stare": "admin", "nowe": NOWE})
+    assert admin.get("/ustawienia/bezpieczenstwo").json() == {"wymagaj_2fa": False, "min_dlugosc_hasla": 0}
+    admin.post("/uzytkownicy", json={"login": "jan", "haslo": "tymczasowe"})
+    u = klient()
+    zaloguj(u, "jan", "tymczasowe")
+    u.post("/auth/haslo", json={"stare": "tymczasowe", "nowe": "jan-haslo"})
+    assert u.get("/sprawy").status_code == 200
+    assert u.get("/ustawienia/bezpieczenstwo").status_code == 403  # tylko administrator
+    assert u.put("/ustawienia/bezpieczenstwo", json={"wymagaj_2fa": False}).status_code == 403
+
+    assert admin.put("/ustawienia/bezpieczenstwo", json={"wymagaj_2fa": True, "min_dlugosc_hasla": -1}).status_code == 422
+    r = admin.put("/ustawienia/bezpieczenstwo", json={"wymagaj_2fa": True, "min_dlugosc_hasla": 12})
+    assert r.json() == {"wymagaj_2fa": True, "min_dlugosc_hasla": 12}
+    # od razu: konta bez drugiego składnika muszą go skonfigurować, nowe hasła wg nowej długości
+    assert u.get("/sprawy").status_code == 401
+    assert u.get("/auth/ja").json()["stan"] == "KONFIGURUJ_2FA"
+    assert admin.get("/auth/ja").json()["stan"] == "KONFIGURUJ_2FA"
+    assert u.post("/auth/haslo", json={"stare": "jan-haslo", "nowe": "za-krotkie"}).status_code == 422
+
+    sekret = admin.post("/auth/totp/nowy").json()["sekret"]
+    assert admin.post("/auth/totp/potwierdz", json={"kod": kod(sekret)}).json()["stan"] == "OK"
+    assert admin.put("/ustawienia/bezpieczenstwo", json={}).json() == {"wymagaj_2fa": False, "min_dlugosc_hasla": 0}
+    assert u.get("/sprawy").status_code == 200
+    assert admin.delete("/auth/totp").json()["totp"] is False  # bez wymogu można usunąć ostatni składnik
 
 
 def test_panel_administratora():

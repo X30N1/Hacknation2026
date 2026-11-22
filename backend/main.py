@@ -10,7 +10,7 @@ from app import llm_client
 from app.config import settings
 from app.auth import repo as konta
 from app.auth.sesja import zalogowany
-from app.routers import anonimizacja, archiwum, auth, sprawy, uzytkownicy
+from app.routers import anonimizacja, archiwum, auth, sprawy, ustawienia, uzytkownicy
 from app.storage import store
 
 
@@ -30,9 +30,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Logowanie i zarządzanie kontami; cała reszta API tylko po pełnym zalogowaniu (hasło + 2FA).
+# Logowanie, konta i ustawienia bezpieczeństwa; reszta API tylko po pełnym zalogowaniu
+# (hasło + drugi składnik, jeśli administrator go wymaga).
 app.include_router(auth.router)
 app.include_router(uzytkownicy.router)
+app.include_router(ustawienia.router)
 _chronione = [Depends(zalogowany)]
 app.include_router(sprawy.router, dependencies=_chronione)
 app.include_router(anonimizacja.router, dependencies=_chronione)

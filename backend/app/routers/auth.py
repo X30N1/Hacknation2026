@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from webauthn.helpers import structs
 
-from app.auth import hasla, repo, totp
+from app.auth import hasla, polityka, repo, totp
 from app.auth.sesja import COOKIE, SesjaDep, Stan, stan, wymagaj_etapu
 from app.config import settings
 
@@ -29,8 +29,9 @@ class Ja(BaseModel):
 
 def ja(s: repo.Sesja) -> Ja:
     u = s.uzytkownik
+    p = polityka.pobierz()
     return Ja(login=u.login, rola=u.rola, stan=stan(s), totp=u.totp_aktywny, klucze=u.klucze,
-              wymagaj_2fa=settings.auth.wymagaj_2fa, min_dlugosc_hasla=settings.auth.min_dlugosc_hasla)
+              wymagaj_2fa=p.wymagaj_2fa, min_dlugosc_hasla=p.min_dlugosc_hasla)
 
 
 def _odswiez(s: repo.Sesja) -> repo.Sesja:
@@ -54,7 +55,9 @@ def _ciasteczko(response: Response, token: str) -> None:
 
 
 def waliduj_haslo(haslo: str, login: str) -> None:
-    n = settings.auth.min_dlugosc_hasla
+    if not haslo:
+        raise HTTPException(422, "Hasło nie może być puste.")
+    n = polityka.pobierz().min_dlugosc_hasla
     if len(haslo) < n:
         raise HTTPException(422, f"Hasło musi mieć co najmniej {n} znaków.")
     if haslo.lower() == login.lower() or haslo == repo.ADMIN_HASLO_STARTOWE:
@@ -180,7 +183,7 @@ def totp_weryfikuj(body: Kod, s: DrugiSkladnikDep):
 def _zostaje_drugi_skladnik(u: repo.Uzytkownik, bez_totp=False, bez_klucza=False) -> None:
     totp_zostaje = u.totp_aktywny and not bez_totp
     klucze_zostaja = u.klucze - (1 if bez_klucza else 0) > 0
-    if settings.auth.wymagaj_2fa and not (totp_zostaje or klucze_zostaja):
+    if polityka.pobierz().wymagaj_2fa and not (totp_zostaje or klucze_zostaja):
         raise HTTPException(409, "To jedyny drugi składnik logowania – najpierw dodaj inny.")
 
 

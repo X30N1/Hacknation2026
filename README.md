@@ -25,9 +25,11 @@ Bez serwera OCR skany wracają z pustym tekstem do wpisania ręcznie.
 
 # Logowanie
 Przy pierwszym uruchomieniu powstaje konto **admin / admin**. Przy pierwszym logowaniu trzeba ustawić
-własne hasło i drugi składnik: aplikację TOTP (Google/Microsoft Authenticator, Aegis…) albo klucz
-sprzętowy FIDO2 (YubiKey itp.). Administrator w zakładce „Użytkownicy” dodaje i usuwa konta, ustawia
-hasła tymczasowe (odblokowuje konto) i resetuje drugi składnik. Ustawienia: `[auth]` w `config.toml`.
+własne hasło. Drugi składnik – aplikacja TOTP (Google/Microsoft Authenticator, Aegis…) albo klucz
+sprzętowy FIDO2 (YubiKey itp.) – jest domyślnie opcjonalny (Moje konto). Administrator w zakładce
+„Użytkownicy” włącza **ustawienia bezpieczeństwa** (wymóg 2FA, minimalna długość hasła – domyślnie
+wyłączone), dodaje i usuwa konta, ustawia hasła tymczasowe (odblokowuje konto) i resetuje drugi
+składnik. Pozostałe ustawienia (sesje, blokada po nieudanych próbach): `[auth]` w `config.toml`.
 Klucze sprzętowe działają tylko przez HTTPS albo na `localhost` – przy innym adresie ustaw `rp_id`
 i `origins`, a za reverse proxy z TLS `cookie_secure = true`.
 

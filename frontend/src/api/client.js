@@ -72,6 +72,8 @@ export const api = {
   usunUzytkownika: (id) => http('DELETE', `/uzytkownicy/${id}`),
   ustawHaslo: (id, haslo) => http('POST', `/uzytkownicy/${id}/haslo`, { haslo }),
   resetuj2fa: (id) => http('POST', `/uzytkownicy/${id}/reset-2fa`),
+  bezpieczenstwo: () => http('GET', '/ustawienia/bezpieczenstwo'),
+  zapiszBezpieczenstwo: (dane) => http('PUT', '/ustawienia/bezpieczenstwo', dane),
 
   sprawy: (filtry) => http('GET', '/sprawy' + qs(filtry)),
   sprawa: (id) => http('GET', `/sprawy/${id}`),

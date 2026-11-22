@@ -1,4 +1,5 @@
-// Panel administratora: dodawanie / usuwanie kont, hasła tymczasowe, reset drugiego składnika.
+// Panel administratora: ustawienia bezpieczeństwa, dodawanie / usuwanie kont, hasła tymczasowe,
+// reset drugiego składnika.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { formatPL } from '../lib/dates'
@@ -29,7 +30,7 @@ function NowyUzytkownik({ minDlugosc, onDodano }) {
           <input required value={login} onChange={(e) => setLogin(e.target.value)} placeholder="np. anna.nowak"
             pattern="[A-Za-z0-9][A-Za-z0-9._\-]{2,39}" autoComplete="off" />
         </label>
-        <label className="field">Hasło tymczasowe (min. {minDlugosc} znaków)
+        <label className="field">Hasło tymczasowe{minDlugosc > 0 && ` (min. ${minDlugosc} znaków)`}
           <input required minLength={minDlugosc} value={haslo} onChange={(e) => setHaslo(e.target.value)} autoComplete="new-password" />
         </label>
         <label className="field">Rola
@@ -39,9 +40,56 @@ function NowyUzytkownik({ minDlugosc, onDodano }) {
           </select>
         </label>
       </div>
-      <p className="hint">Przekaż hasło użytkownikowi osobiście. Przy pierwszym logowaniu ustawi własne hasło i drugi składnik.</p>
+      <p className="hint">Przekaż hasło użytkownikowi osobiście. Przy pierwszym logowaniu ustawi własne hasło
+        (i drugi składnik, jeśli jest wymagany).</p>
       {blad && <p className="txt-danger" role="alert">{blad}</p>}
       <button type="submit" className="btn btn-primary">Dodaj</button>
+    </form>
+  )
+}
+
+function UstawieniaBezpieczenstwa({ onZapisano }) {
+  const [dane, setDane] = useState(null)
+  const [blad, setBlad] = useState(null)
+  const [trwa, setTrwa] = useState(false)
+
+  useEffect(() => { api.bezpieczenstwo().then(setDane).catch((e) => setBlad(e.message)) }, [])
+
+  async function wyslij(e) {
+    e.preventDefault()
+    setBlad(null)
+    setTrwa(true)
+    try {
+      const zapisane = await api.zapiszBezpieczenstwo(dane)
+      setDane(zapisane)
+      await onZapisano(zapisane)
+    } catch (err) {
+      setBlad(err.message)
+    } finally {
+      setTrwa(false)
+    }
+  }
+
+  if (!dane) return blad ? <p className="txt-danger" role="alert">{blad}</p> : null
+
+  return (
+    <form className="card" onSubmit={wyslij}>
+      <h2>Ustawienia bezpieczeństwa</h2>
+      <label className="field">
+        <span>
+          <input type="checkbox" checked={dane.wymagaj_2fa}
+            onChange={(e) => setDane({ ...dane, wymagaj_2fa: e.target.checked })} />{' '}
+          Wymagaj drugiego składnika (aplikacja uwierzytelniająca albo klucz sprzętowy)
+        </span>
+      </label>
+      <p className="hint">Po włączeniu konta bez drugiego składnika – także Twoje – muszą go skonfigurować przy najbliższej akcji.</p>
+      <label className="field">Minimalna długość hasła (0 = bez wymogu)
+        <input type="number" min={0} max={128} required value={dane.min_dlugosc_hasla}
+          onChange={(e) => setDane({ ...dane, min_dlugosc_hasla: Number(e.target.value) })} />
+      </label>
+      <p className="hint">Dotyczy nowych haseł – obecne hasła pozostają ważne.</p>
+      {blad && <p className="txt-danger" role="alert">{blad}</p>}
+      <button type="submit" className="btn btn-primary" disabled={trwa}>{trwa ? 'Zapisuję…' : 'Zapisz ustawienia'}</button>
     </form>
   )
 }
@@ -75,7 +123,7 @@ function ZmienHaslo({ u, minDlugosc, onGotowe, onAnuluj }) {
   )
 }
 
-export default function Uzytkownicy({ ja }) {
+export default function Uzytkownicy({ ja, onZmiana }) {
   const [lista, setLista] = useState(null)
   const [blad, setBlad] = useState(null)
   const [info, setInfo] = useState(null)
@@ -103,6 +151,11 @@ export default function Uzytkownicy({ ja }) {
       <div className="page-head"><h1>Użytkownicy</h1></div>
       {info && <p className="banner-info inline-banner" role="status">{info}</p>}
       {blad && <p className="txt-danger" role="alert">{blad}</p>}
+
+      <UstawieniaBezpieczenstwa onZapisano={async () => {
+        setInfo('Zapisano ustawienia bezpieczeństwa.')
+        onZmiana(await api.ja())  // np. po włączeniu 2FA administrator bez drugiego składnika musi go dodać
+      }} />
 
       <NowyUzytkownik minDlugosc={ja.min_dlugosc_hasla} onDodano={(u) => { setInfo(`Dodano użytkownika ${u.login}.`); odswiez() }} />
 

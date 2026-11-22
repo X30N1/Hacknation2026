@@ -96,7 +96,7 @@ export default function App() {
           <Route path="/sprawy/:id" element={<Sprawa />} />
           <Route path="/archiwum" element={<Archiwum />} />
           <Route path="/konto" element={<Konto ja={ja} onZmiana={setJa} />} />
-          {ja.rola === 'admin' && <Route path="/uzytkownicy" element={<Uzytkownicy ja={ja} />} />}
+          {ja.rola === 'admin' && <Route path="/uzytkownicy" element={<Uzytkownicy ja={ja} onZmiana={setJa} />} />}
           <Route path="*" element={<NieZnaleziono />} />
         </Routes>
       </main>

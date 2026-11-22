@@ -18,7 +18,7 @@ Po haśle logowanie przechodzi przez etapy (`stan` w odpowiedzi):
 |---|---|
 | `DRUGI_SKLADNIK` | `POST /auth/totp/weryfikuj` albo klucz (`/auth/klucz/logowanie/*`) – przed zmianą hasła, żeby samo hasło nie wystarczyło do przejęcia konta |
 | `ZMIEN_HASLO` | `POST /auth/haslo` – pierwsze logowanie lub hasło tymczasowe od administratora |
-| `KONFIGURUJ_2FA` | `POST /auth/totp/nowy` + `/auth/totp/potwierdz` albo `/auth/klucz/rejestracja/*` (gdy `[auth] wymagaj_2fa`) |
+| `KONFIGURUJ_2FA` | `POST /auth/totp/nowy` + `/auth/totp/potwierdz` albo `/auth/klucz/rejestracja/*` (gdy administrator włączył wymóg 2FA) |
 | `OK` | pełny dostęp; sesja na `sesja_godziny` (wcześniej `sesja_wstepna_minuty`) |
 
 Obiekt **Ja**: `{ login, rola: "admin" | "urzednik", stan, totp: bool, klucze: int, wymagaj_2fa, min_dlugosc_hasla }`.
@@ -45,6 +45,13 @@ Obiekt: `{ id, login, rola, musi_zmienic_haslo, totp, klucze, zablokowany_do, ut
 - `DELETE /uzytkownicy/{id}` → 204 (409: własne konto albo ostatni administrator)
 - `POST /uzytkownicy/{id}/haslo` `{ haslo }` → hasło tymczasowe, odblokowanie konta, wylogowanie użytkownika
 - `POST /uzytkownicy/{id}/reset-2fa` → usuwa TOTP i klucze (zgubiony telefon / klucz), wylogowanie użytkownika
+
+## Ustawienia bezpieczeństwa (tylko administrator, inaczej 403)
+Obiekt: `{ wymagaj_2fa: bool, min_dlugosc_hasla: int (0–128, 0 = bez wymogu) }`. Domyślnie `false` / `0`
+(hasło nie może być tylko puste ani równe loginowi / hasłu startowemu).
+- `GET /ustawienia/bezpieczenstwo`
+- `PUT /ustawienia/bezpieczenstwo` → zapisany obiekt. Działa od razu: po włączeniu 2FA konta bez drugiego
+  składnika wracają do etapu `KONFIGURUJ_2FA`; minimalna długość dotyczy kolejnych zmian haseł.
 
 ## GET /health
 

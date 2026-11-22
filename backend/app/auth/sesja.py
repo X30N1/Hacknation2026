@@ -4,7 +4,7 @@ Kolejność etapów po poprawnym haśle:
   1. DRUGI_SKLADNIK – konto ma TOTP / klucz: trzeba go potwierdzić (przed zmianą hasła, żeby samo
      hasło – np. tymczasowe od administratora – nie wystarczyło do przejęcia konta),
   2. ZMIEN_HASLO    – pierwsze logowanie albo hasło ustawione przez administratora,
-  3. KONFIGURUJ_2FA – konto bez drugiego składnika (gdy [auth] wymagaj_2fa = true),
+  3. KONFIGURUJ_2FA – konto bez drugiego składnika (gdy administrator włączył wymóg 2FA),
   4. OK             – pełny dostęp.
 """
 from enum import StrEnum
@@ -12,8 +12,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
-from app.auth import repo
-from app.config import settings
+from app.auth import polityka, repo
 
 COOKIE = "sesja"
 
@@ -31,7 +30,7 @@ def stan(s: repo.Sesja) -> Stan:
         return Stan.DRUGI_SKLADNIK
     if u.musi_zmienic_haslo:
         return Stan.ZMIEN_HASLO
-    if settings.auth.wymagaj_2fa and not u.ma_drugi_skladnik:
+    if not u.ma_drugi_skladnik and polityka.pobierz().wymagaj_2fa:
         return Stan.KONFIGURUJ_2FA
     return Stan.OK
 
