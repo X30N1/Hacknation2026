@@ -3,7 +3,8 @@
 Wyszukiwanie pełnotekstowe SQLite FTS5 (tabele sprawy_fts, dokumenty_fts – app/storage.py)
 z prostym „stemmingiem” przez prefiksy słów (fts_query). Dwa rankingi – po przedmiocie
 sprawy i po treści dokumentów – łączone przez Reciprocal Rank Fusion. Działa lokalnie, bez modelu
-językowego. Przeszukiwane są wyłącznie zanonimizowane teksty (oryginały nie trafiają do bazy).
+językowego. Dokumenty spraw są w bazie wyłącznie zanonimizowane (oryginały nie trafiają do bazy);
+baza wiedzy (ustawy, zarządzenia, wzory, archiwalne pisma) – w całości, bez anonimizacji.
 """
 import json
 import math
@@ -14,7 +15,7 @@ from pathlib import Path
 
 from app.sprawy import repo
 from app.sprawy.model import (
-    RODZAJE_WIEDZY, PodobnaSprawa, TrafienieArchiwum, WiedzaDokument,
+    RODZAJE_WIEDZY, Dokument, PodobnaSprawa, TrafienieArchiwum, WiedzaDokument,
 )
 from app.storage import store
 
@@ -282,6 +283,15 @@ def lista_wiedzy() -> list[WiedzaDokument]:
             ",".join("?" * len(RODZAJE_WIEDZY))), tuple(RODZAJE_WIEDZY),
     ).fetchall()
     return [WiedzaDokument(**dict(r)) for r in rows]
+
+
+def wiedza(did: int) -> Dokument | None:
+    """Dokument z bazy wiedzy (nie dokument sprawy) – do czytania we frontendzie."""
+    r = store.conn.execute(
+        "SELECT id FROM dokumenty WHERE id = ? AND sprawa_id IS NULL AND rodzaj IN ({})".format(
+            ",".join("?" * len(RODZAJE_WIEDZY))), (did, *RODZAJE_WIEDZY),
+    ).fetchone()
+    return repo.dokument(did) if r else None
 
 
 def usun_wiedze(did: int) -> bool:

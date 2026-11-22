@@ -30,12 +30,14 @@ def main() -> None:
         n, s = importer.importuj(a.xlsx)
         print(f"Import xlsx: {n} nowych, {s} już istniało ({a.xlsx.name})")
     if a.archiwum:
-        if PISMA.is_dir():
-            n, s = import_archiwum.importuj_pisma(PISMA)
-            print(f"Archiwum pism: {n} nowych, {s} pominiętych (już są lub bez tekstu)")
+        # Najpierw baza wiedzy (pliki tekstowe), potem pisma ze skanami (OCR) – seed w Dockerze działa
+        # w tle, więc baza wiedzy jest dostępna od razu.
         if PODSTAWY.is_dir():
             n, s = import_archiwum.importuj_wiedze(PODSTAWY)
             print(f"Baza wiedzy: {n} nowych, {s} pominiętych")
+        if PISMA.is_dir():
+            n, s = import_archiwum.importuj_pisma(PISMA)
+            print(f"Archiwum pism: {n} nowych, {s} pominiętych (już są lub bez tekstu)")
     store.close()
 
 

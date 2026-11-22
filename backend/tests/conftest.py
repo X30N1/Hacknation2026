@@ -17,8 +17,7 @@ def isolated(monkeypatch, tmp_path, request):
     monkeypatch.setattr(settings, "llm", LLMSettings())
     monkeypatch.setattr(settings, "anonimizacja", AnonimizacjaSettings())
     monkeypatch.setattr(settings, "auth", AuthSettings())
-    # OCR nigdy nie trafia w prawdziwy serwer (adres spoza sieci lokalnej = OCR wyłączony)
-    monkeypatch.setattr(settings, "ocr", OCRSettings(base_url="http://ocr.invalid"))
+    monkeypatch.setattr(settings, "ocr", OCRSettings())
     monkeypatch.setattr(settings, "pliki", PlikiSettings(katalog=str(tmp_path / "pliki")))
     store.connect(tmp_path / "test.db")
     # Testy funkcji aplikacji działają jako zalogowany urzędnik; test_auth sprawdza prawdziwe logowanie.

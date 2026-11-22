@@ -97,5 +97,6 @@ export const api = {
   // baza wiedzy: ustawy, zarządzenia, wzory pism, archiwalne pisma
   wiedza: () => http('GET', '/wiedza'),
   dodajWiedze: (plik, rodzaj) => http('POST', '/wiedza', form({ plik, rodzaj })),
+  czytajWiedze: (id) => http('GET', `/wiedza/${id}`),
   usunWiedze: (id) => http('DELETE', `/wiedza/${id}`),
 }

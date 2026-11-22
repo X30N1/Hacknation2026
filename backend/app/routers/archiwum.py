@@ -6,7 +6,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 
-from app.routers.sprawy import Dzis, _sprawa, _wczytaj_plik, sprawdz_anonimizacje
+from app.routers.sprawy import Dzis, _sprawa, _wczytaj_plik
 from app.sprawy import archiwum, projekt, repo, wydzialy
 from app.sprawy.model import (
     RODZAJE_WIEDZY, Dokument, PodobnaSprawa, ProjektOdpowiedzi, SugestieWydzialow, TrafienieArchiwum,
@@ -53,15 +53,23 @@ async def lista_wiedzy():
 @router.post("/wiedza", response_model=Dokument, status_code=status.HTTP_201_CREATED)
 async def dodaj_wiedze(plik: UploadFile = File(...), rodzaj: str = Form(...)):
     """Ustawa, zarządzenie, wzór pisma albo archiwalne pismo – materiał dla wyszukiwarki
-    i projektów odpowiedzi. Frontend wysyła tekst po anonimizacji."""
+    i projektów odpowiedzi. Bez anonimizacji – to materiały źródłowe, zapisywane w całości."""
     rodzaj = rodzaj.strip().upper()
     if rodzaj not in RODZAJE_WIEDZY:
         raise HTTPException(422, f"Nieznany rodzaj. Dozwolone: {', '.join(RODZAJE_WIEDZY)}.")
     nazwa, dane, odczyt = await _wczytaj_plik(plik)
     if not odczyt.tekst.strip():
         raise HTTPException(422, "Plik nie zawiera tekstu.")
-    sprawdz_anonimizacje(odczyt.tekst)
     return repo.zapisz_dokument(nazwa, dane, rodzaj, odczyt.metoda, odczyt.tekst, odczyt.ocr_pewnosc)
+
+
+@router.get("/wiedza/{did}", response_model=Dokument)
+async def czytaj_wiedze(did: int):
+    """Pełny tekst dokumentu z bazy wiedzy (jak w bazie)."""
+    doc = archiwum.wiedza(did)
+    if doc is None:
+        raise HTTPException(404, "Nie znaleziono dokumentu w bazie wiedzy.")
+    return doc
 
 
 @router.delete("/wiedza/{did}", status_code=status.HTTP_204_NO_CONTENT)
@@ -74,7 +82,7 @@ async def usun_wiedze(did: int):
 # ---------- eksport ----------
 @router.get("/dokumenty/{did}/docx")
 async def dokument_docx(did: int):
-    """Tekst dokumentu (zanonimizowany, jak w bazie) jako plik Word."""
+    """Tekst dokumentu (jak w bazie: dokumenty spraw zanonimizowane, baza wiedzy w całości) jako plik Word."""
     import docx
 
     doc = repo.dokument(did)

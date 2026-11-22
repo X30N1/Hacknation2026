@@ -1,12 +1,11 @@
-"""Odczyt tekstu z wgranych plików: DOCX, PDF (warstwa tekstowa), skany PDF (OCR – GLM-OCR), TXT."""
-import base64
+"""Odczyt tekstu z wgranych plików: DOCX, PDF (warstwa tekstowa), skany PDF (OCR – Tesseract), TXT."""
 import io
 import logging
+import shutil
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
-import httpx
-
-from app import llm_client
 from app.config import settings
 from app.sprawy.model import Metoda
 
@@ -77,71 +76,28 @@ def _pdf(dane: bytes) -> Odczyt:
     return _ocr_pdf(dane)
 
 
+@lru_cache
 def ocr_dostepny() -> bool:
-    """Serwer GLM-OCR odpowiada i ma model z [ocr] (Ollama: `ollama pull glm-ocr`)."""
-    cfg = settings.ocr
-    if not cfg.zezwol_zewnetrzny and not llm_client.is_local(cfg.base_url):
-        log.warning("OCR wyłączony: %s nie jest serwerem lokalnym, a skany zawierają niezamazane "
-                    "dane osobowe (ustaw [ocr] zezwol_zewnetrzny = true, jeśli to zamierzone)", cfg.base_url)
-        return False
+    """Tesseract + pakiet językowy z [ocr] jezyk (Arch: tesseract-data-pol, Debian: tesseract-ocr-pol)."""
+    exe = shutil.which("tesseract")
+    if not exe:
+        # Windows: instalator UB Mannheim nie dodaje się do PATH
+        domyslny = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+        if not domyslny.is_file():
+            log.warning("OCR wyłączony: brak programu tesseract")
+            return False
+        exe = str(domyslny)
     try:
-        with _klient(timeout=5) as k:
-            if cfg.api == "ollama":
-                resp = k.get("/api/tags")
-                resp.raise_for_status()
-                modele = {m.get("name") for m in resp.json().get("models") or []}
-            else:
-                resp = k.get("/models")
-                resp.raise_for_status()
-                modele = {m.get("id") for m in resp.json().get("data") or []}
+        import pytesseract
+
+        pytesseract.pytesseract.tesseract_cmd = exe
+        if settings.ocr.jezyk in pytesseract.get_languages(config=""):
+            return True
     except Exception as exc:  # noqa: BLE001
-        log.warning("Serwer OCR niedostępny (%s): %s", cfg.base_url, exc)
+        log.warning("OCR wyłączony: %s", exc)
         return False
-    # Ollama zwraca nazwy z tagiem („glm-ocr:latest”)
-    return not modele or cfg.model in modele or f"{cfg.model}:latest" in modele
-
-
-def _klient(timeout: float | None = None) -> httpx.Client:
-    cfg = settings.ocr
-    headers = {"Authorization": f"Bearer {cfg.api_key}"} if cfg.api_key else {}
-    return httpx.Client(base_url=cfg.base_url, headers=headers, timeout=timeout or cfg.timeout)
-
-
-def _bez_ogrodzenia(tekst: str) -> str:
-    """Model bywa, że opakowuje wynik w blok ```markdown … ``` – zostawiamy sam tekst."""
-    t = tekst.strip()
-    if t.startswith("```") and t.endswith("```"):
-        t = t.split("\n", 1)[1] if "\n" in t else ""
-        t = t.rsplit("```", 1)[0]
-    return t.strip()
-
-
-def rozpoznaj_strone(png: bytes) -> str:
-    """Jedna strona (PNG) -> tekst przez GLM-OCR."""
-    cfg = settings.ocr
-    obraz = base64.b64encode(png).decode()
-    with _klient() as k:
-        if cfg.api == "ollama":
-            resp = k.post("/api/generate", json={
-                "model": cfg.model, "prompt": cfg.prompt, "images": [obraz], "stream": False,
-                "options": {"temperature": 0, "num_predict": cfg.max_tokens, "num_ctx": cfg.num_ctx,
-                            **({"num_thread": cfg.num_thread} if cfg.num_thread else {})},
-            })
-            resp.raise_for_status()
-            tekst = resp.json().get("response") or ""
-        else:
-            resp = k.post("/chat/completions", json={
-                "model": cfg.model,
-                "messages": [{"role": "user", "content": [
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64," + obraz}},
-                    {"type": "text", "text": cfg.prompt},
-                ]}],
-                "temperature": 0,
-                "max_tokens": cfg.max_tokens,
-            })
-            resp.raise_for_status()
-            tekst = resp.json()["choices"][0]["message"].get("content") or ""
-    return _bez_ogrodzenia(tekst)
+    log.warning("OCR wyłączony: tesseract bez języka %r", settings.ocr.jezyk)
+    return False
 
 
 def _ocr_pdf(dane: bytes) -> Odczyt:
@@ -150,29 +106,27 @@ def _ocr_pdf(dane: bytes) -> Odczyt:
         return Odczyt("", Metoda.OCR, 0.0)
 
     import pypdfium2
+    import pytesseract
 
     pdf = pypdfium2.PdfDocument(dane)
-    teksty, odczytane = [], 0
+    teksty, pewnosci = [], []
     try:
-        strony = min(len(pdf), settings.ocr.max_stron)
-        for i in range(strony):
-            buf = io.BytesIO()
-            strona = pdf[i]
-            bok = max(strona.get_size())  # w punktach (1/72 cala)
-            skala = min(settings.ocr.dpi / 72, settings.ocr.max_bok_px / bok)
-            strona.render(scale=skala).to_pil().save(buf, format="PNG")
-            try:
-                teksty.append(rozpoznaj_strone(buf.getvalue()))
-                odczytane += 1
-            except Exception as exc:  # noqa: BLE001
-                log.warning("OCR strony %d nieudany: %s", i + 1, exc)
-                teksty.append(f"[strona {i + 1} – nie odczytano, uzupełnij ręcznie]")
+        for i in range(min(len(pdf), settings.ocr.max_stron)):
+            obraz = pdf[i].render(scale=settings.ocr.dpi / 72).to_pil()
+            dane_ocr = pytesseract.image_to_data(
+                obraz, lang=settings.ocr.jezyk, output_type=pytesseract.Output.DICT
+            )
+            linie: dict[tuple, list[str]] = {}
+            for j, slowo in enumerate(dane_ocr["text"]):
+                conf = float(dane_ocr["conf"][j])
+                if conf < 0 or not slowo.strip():
+                    continue
+                pewnosci.append(conf)
+                klucz = (dane_ocr["block_num"][j], dane_ocr["par_num"][j], dane_ocr["line_num"][j])
+                linie.setdefault(klucz, []).append(slowo)
+            teksty.append("\n".join(" ".join(w) for w in linie.values()))
     finally:
         pdf.close()
-    # GLM-OCR nie podaje pewności rozpoznania. None = wszystkie strony odczytane;
-    # część nieudana -> odsetek odczytanych stron (frontend pokaże ostrzeżenie poniżej 60%).
-    if not strony:
-        pewnosc = 0.0
-    else:
-        pewnosc = None if odczytane == strony else round(odczytane / strony, 2)
-    return Odczyt("\n\n".join(t for t in teksty if t).strip(), Metoda.OCR, pewnosc)
+    # średnia pewność słów (0–1); frontend ostrzega poniżej 0.6 (np. pismo odręczne)
+    pewnosc = round(sum(pewnosci) / len(pewnosci) / 100, 2) if pewnosci else 0.0
+    return Odczyt("\n\n".join(teksty).strip(), Metoda.OCR, pewnosc)

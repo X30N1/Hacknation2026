@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.routers import sprawy as sprawy_router
 from app.seed import DOMYSLNY_XLSX, PISMA, PODSTAWY
 from app.sprawy import ekstrakcja, import_archiwum, importer
+from app.sprawy.model import Metoda
 from main import app
 
 DZIS = date(2026, 11, 21)
@@ -69,10 +70,33 @@ def test_wyszukiwarka_i_baza_wiedzy():
     assert client.get("/archiwum/szukaj", params={"q": "terminie zwłoki"}).json()[0]["dokument_id"] == wid
 
     assert [w["nazwa_pliku"] for w in client.get("/wiedza").json()] == ["udip.txt"]
+    doc = client.get(f"/wiedza/{wid}").json()
+    assert doc["tekst"].startswith("Art. 13.") and doc["rodzaj"] == "USTAWA"
+    odp = client.get(f"/sprawy/{sid}").json()["dokumenty"][0]["id"]
+    assert client.get(f"/wiedza/{odp}").status_code == 404  # dokument sprawy to nie baza wiedzy
     assert client.delete(f"/wiedza/{wid}").status_code == 204
     assert client.get("/wiedza").json() == []
+    assert client.get(f"/wiedza/{wid}").status_code == 404
     assert client.delete(f"/wiedza/{wid}").status_code == 404
     assert client.get("/archiwum/szukaj", params={"q": "terminie zwłoki"}).json() == []
+
+
+def test_baza_wiedzy_bez_anonimizacji():
+    tekst = "Archiwalne pismo do Jana Kowalskiego, PESEL 44051401359."
+    r = client.post("/wiedza", data={"rodzaj": "ARCHIWUM"}, files={"plik": ("pismo.txt", tekst.encode())})
+    assert r.status_code == 201 and client.get(f"/wiedza/{r.json()['id']}").json()["tekst"] == tekst
+    # dokumenty spraw nadal tylko po anonimizacji
+    sid = sprawa(9, "Test")
+    assert client.post(f"/sprawy/{sid}/dokumenty", data={"rodzaj": "WNIOSEK"},
+                       files={"plik": ("d.txt", tekst.encode())}).status_code == 422
+
+
+def test_seed_bazy_wiedzy_bez_anonimizacji(tmp_path):
+    from app.sprawy import import_archiwum
+    tekst = "Zarządzenie nr 535/2024 Prezydenta Miasta Bydgoszczy – Jan Kowalski, tel. 501 234 567."
+    (tmp_path / "Zarządzenie test.txt").write_text(tekst)
+    assert import_archiwum.importuj_wiedze(tmp_path) == (1, 0)
+    assert client.get(f"/wiedza/{client.get('/wiedza').json()[0]['id']}").json()["tekst"] == tekst
 
 
 def test_projekt_odpowiedzi_z_szablonu_i_docx():
@@ -96,6 +120,16 @@ def test_projekt_odpowiedzi_z_szablonu_i_docx():
 
     bez = sprawa(8, "Coś")
     assert "brak wgranych odpowiedzi" in client.post(f"/sprawy/{bez}/projekt").json()["tekst"]
+
+
+def test_seed_nie_zapisuje_nieudanego_ocr(monkeypatch, tmp_path):
+    """OCR nic nie odczytał (np. brak tesseract) -> pismo pominięte i ponowione w kolejnym seedzie."""
+    (tmp_path / "Wniosek - skan.pdf").write_bytes(b"%PDF")
+    wyniki = iter([ekstrakcja.Odczyt("", Metoda.OCR, 0.0),
+                   ekstrakcja.Odczyt("Odczytany wniosek", Metoda.OCR, None)])
+    monkeypatch.setattr(ekstrakcja, "odczytaj", lambda nazwa, dane: next(wyniki))
+    assert import_archiwum.importuj_pisma(tmp_path) == (0, 1)
+    assert import_archiwum.importuj_pisma(tmp_path) == (1, 0)
 
 
 @pytest.mark.skipif(not (DOMYSLNY_XLSX.exists() and PISMA.is_dir()), reason="brak paczki UMB")

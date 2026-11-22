@@ -7,7 +7,8 @@ import OcrBaner from './OcrBaner'
 
 // Dodawanie dokumentu: odczyt BEZ zapisu → (poprawa tekstu) → anonimizacja (szare → czarne)
 // → zapis wyłącznie zanonimizowanej treści. Oryginał nie trafia do bazy.
-// zadanie = { plik, tytul, przycisk, rodzaj, rodzaje?: string[], wydzialy?: {skrot,nazwa}[], wydzial? }
+// zadanie.anonimizacja === false (baza wiedzy): bez kroku anonimizacji – zapis odczytanego tekstu.
+// zadanie = { plik, tytul, przycisk, rodzaj, rodzaje?: string[], wydzialy?: {skrot,nazwa}[], wydzial?, anonimizacja? }
 export default function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj }) {
   const [odczyt, setOdczyt] = useState(null)
   const [tekst, setTekst] = useState('')
@@ -34,13 +35,15 @@ export default function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj
   }, [zadanie])
 
   const brakWydzialu = zadanie.wydzialy && !wydzial
+  const anonimizuj = zadanie.anonimizacja !== false
+  const doZapisu = anonimizuj ? zanonimizowany : (tekst.trim() ? tekst : null)
 
   async function zapisz() {
-    if (zanonimizowany == null || brakWydzialu) return
+    if (doZapisu == null || brakWydzialu) return
     setBlad(null)
     setZapis(true)
     try {
-      await onZapisz(jakoPlikTxt(odczyt.nazwa_pliku, zanonimizowany), { rodzaj, wydzial: wydzial || null })
+      await onZapisz(jakoPlikTxt(odczyt.nazwa_pliku, doZapisu), { rodzaj, wydzial: wydzial || null })
     } catch (e) {
       setBlad(e.message)
       setZapis(false)
@@ -55,7 +58,7 @@ export default function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj
       </div>
       {blad && <div className="card error" role="alert">{blad}</div>}
       {!odczyt && !blad && (
-        <p className="muted"><span className="spinner" aria-hidden="true" /> Odczytuję dokument… (skany rozpoznawane przez OCR mogą potrwać kilka minut)</p>
+        <p className="muted"><span className="spinner" aria-hidden="true" /> Odczytuję dokument… (skany mogą potrwać do minuty)</p>
       )}
       {odczyt && (
         <>
@@ -78,7 +81,7 @@ export default function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj
             )}
             {edycja ? (
               <button type="button" className="btn btn-small" disabled={!tekst.trim()} onClick={() => setEdycja(false)}>
-                Gotowe – przejdź do anonimizacji
+                {anonimizuj ? 'Gotowe – przejdź do anonimizacji' : 'Gotowe'}
               </button>
             ) : (
               <button type="button" className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>
@@ -86,18 +89,20 @@ export default function NowyDokument({ zadanie, wnioskodawca, onZapisz, onAnuluj
           </div>
           {edycja ? (
             <textarea className="doc-text" rows={16} value={tekst} onChange={(e) => setTekst(e.target.value)} aria-label="Treść dokumentu" />
-          ) : (
+          ) : anonimizuj ? (
             <AnonimizacjaPodglad tekst={tekst} wnioskodawca={wnioskodawca} onZmiana={setZanonimizowany} />
+          ) : (
+            <pre className="doc-text readonly">{tekst}</pre>
           )}
         </>
       )}
       <div className="actions">
-        {zanonimizowany == null && odczyt && !edycja && (
+        {anonimizuj && zanonimizowany == null && odczyt && !edycja && (
           <span className="hint">Zaakceptuj anonimizację („Akceptuję – pokaż zamazane”), aby zapisać.</span>
         )}
         {brakWydzialu && <span className="hint txt-danger">Wybierz wydział.</span>}
         <button type="button" className="btn" disabled={zapis} onClick={onAnuluj}>Anuluj</button>
-        <button type="button" className="btn btn-primary" disabled={zapis || edycja || zanonimizowany == null || brakWydzialu} onClick={zapisz}>
+        <button type="button" className="btn btn-primary" disabled={zapis || edycja || doZapisu == null || brakWydzialu} onClick={zapisz}>
           {zapis ? 'Zapisuję…' : zadanie.przycisk}
         </button>
       </div>

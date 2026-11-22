@@ -113,7 +113,7 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - nazwa_pliku: str
 - wydzial: str | null
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
-- ocr_pewnosc: float | null (tylko OCR: null = wszystkie strony odczytane – GLM-OCR nie podaje pewności; 0–1 = odsetek odczytanych stron, 0 = serwer OCR niedostępny)
+- ocr_pewnosc: float | null (0–1, tylko OCR: średnia pewność rozpoznanych słów; 0 = OCR niedostępny lub nic nie odczytano)
 - tekst: str
 
 ## GET /sprawy
@@ -170,7 +170,7 @@ jego zanonimizowany tekst jako plik Word.
 ### Obiekt Odczyt
 - nazwa_pliku: str
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
-- ocr_pewnosc: float | null (tylko OCR: null = wszystkie strony odczytane – GLM-OCR nie podaje pewności; 0–1 = odsetek odczytanych stron, 0 = serwer OCR niedostępny)
+- ocr_pewnosc: float | null (0–1, tylko OCR: średnia pewność rozpoznanych słów; 0 = OCR niedostępny lub nic nie odczytano)
 - tekst: str
 
 ## POST /dokumenty/odczyt
@@ -228,7 +228,8 @@ Sprawy, dokumenty spraw i baza wiedzy: `[{ sprawa_id, znak, dokument_id, nazwa_p
 
 ## Baza wiedzy
 - `GET /wiedza` → `[{ id, rodzaj, nazwa_pliku, znaki, utworzono }]`
-- `POST /wiedza` multipart `plik`, `rodzaj` (USTAWA | ZARZADZENIE | WZOR | ARCHIWUM) → 201 + Dokument (`sprawa_id = null`); blokada PESEL / dowodu
+- `POST /wiedza` multipart `plik`, `rodzaj` (USTAWA | ZARZADZENIE | WZOR | ARCHIWUM) → 201 + Dokument (`sprawa_id = null`); bez anonimizacji (materiały źródłowe zapisywane w całości)
+- `GET /wiedza/{id}` → Dokument (pełny tekst; 404 gdy to nie dokument bazy wiedzy)
 - `DELETE /wiedza/{id}` → 204 (np. stara wersja ustawy)
 
 ---
