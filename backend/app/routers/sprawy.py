@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.concurrency import run_in_threadpool
 
 from app import anonimizacja
+from app.auth.sesja import Administrator, Zalogowany
 from app.config import settings
 from app.sprawy import analiza, ekstrakcja, repo, terminy
 from app.sprawy.model import (
-    Dokument, DokumentPopraw, Odczyt, OdczytWniosku, SprawaLista, SprawaSzczegoly, SprawaUtworz,
-    TypZdarzenia, Zrodlo, ZdarzenieDodaj,
+    Dokument, DokumentPopraw, Odczyt, OdczytWniosku, SprawaEdytuj, SprawaLista, SprawaSzczegoly,
+    SprawaUtworz, TypZdarzenia, Zrodlo, ZdarzenieDodaj,
 )
 
 router = APIRouter(tags=["sprawy"])
@@ -75,12 +76,48 @@ async def utworz(body: SprawaUtworz, d: Dzis):
     return _sprawa(sid, d)
 
 
+@router.patch("/sprawy/{sid}", response_model=SprawaSzczegoly)
+async def edytuj(sid: int, body: SprawaEdytuj, d: Dzis, admin: Administrator):
+    """Poprawa danych wniosku (znak, data wpływu, wnioskodawca, przedmiot, inicjały) – administrator."""
+    s = _sprawa(sid, d)
+    pola = body.model_dump(exclude_unset=True)
+    if pola.get("znak") not in (None, s.znak) and repo.znak_istnieje(pola["znak"]):
+        raise HTTPException(409, f"Sprawa {pola['znak']} już istnieje.")
+    if pola.get("znak") is None:
+        pola.pop("znak", None)
+    if (wplyw := pola.get("data_wplywu")) is not None:
+        if wplyw > d:
+            raise HTTPException(422, "Data wpływu nie może być z przyszłości.")
+        pozniejsze = [z.data for z in s.zdarzenia if z.typ != TypZdarzenia.REJESTRACJA]
+        if pozniejsze and wplyw > min(pozniejsze):
+            raise HTTPException(422, f"Data wpływu nie może być późniejsza niż pierwsze zdarzenie ({min(pozniejsze)}).")
+    else:
+        pola.pop("data_wplywu", None)
+    for k in ("wnioskodawca", "przedmiot"):
+        if pola.get(k) is None:
+            pola.pop(k, None)
+    if "inicjaly" in pola:
+        pola["inicjaly"] = pola["inicjaly"] or None
+    stare = s.model_dump(mode="json")
+    zmiany = {k: [stare[k], v.isoformat() if isinstance(v, date) else v]
+              for k, v in pola.items() if (v.isoformat() if isinstance(v, date) else v) != stare[k]}
+    if not zmiany:
+        return s
+    repo.edytuj_sprawe(sid, pola)
+    repo.dodaj_zdarzenie(sid, TypZdarzenia.SPRAWA_ZMIANA, d, payload={"zmiany": zmiany}, inicjaly=admin.login)
+    return _sprawa(sid, d)
+
+
 @router.post("/sprawy/{sid}/zdarzenia", response_model=SprawaSzczegoly,
              status_code=status.HTTP_201_CREATED)
-async def dodaj_zdarzenie(sid: int, body: ZdarzenieDodaj, d: Dzis):
+async def dodaj_zdarzenie(sid: int, body: ZdarzenieDodaj, d: Dzis, u: Zalogowany):
     s = _sprawa(sid, d)
+    if body.typ in terminy.TYLKO_ADMIN and u.rola != "admin":
+        raise HTTPException(403, "Zamknąć lub wznowić sprawę może tylko administrator.")
     if s.zrodlo == Zrodlo.IMPORT:
         raise HTTPException(409, "Sprawa z importu archiwalnego jest zamknięta.")
+    if body.typ in terminy.AUDYT:
+        raise HTTPException(422, "Ten wpis historii tworzy serwer przy edycji dokumentów i spraw.")
     if s.status not in terminy.DOZWOLONE[body.typ]:
         raise HTTPException(
             409, f"Zdarzenie {body.typ.value} jest niedostępne w statusie {s.status.value}."
@@ -102,11 +139,18 @@ async def dodaj_zdarzenie(sid: int, body: ZdarzenieDodaj, d: Dzis):
         if not wydzialy:
             raise HTTPException(422, "Podaj co najmniej jeden wydział.")
         payload["wydzialy"] = wydzialy
-    elif body.nowy_termin is not None and body.typ != TypZdarzenia.WEZWANIE_DOPRECYZOWANIE:
+    elif body.typ == TypZdarzenia.ZAMKNIECIE:
+        powod = str(payload.get("powod") or "").strip()
+        if not powod:
+            raise HTTPException(422, "Podaj powód zamknięcia sprawy.")
+        payload = {"powod": powod[:500]}
+    if body.nowy_termin is not None and body.typ not in (TypZdarzenia.PRZEDLUZENIE,
+                                                         TypZdarzenia.WEZWANIE_DOPRECYZOWANIE):
         raise HTTPException(422, "Nowy termin można podać tylko przy przedłużeniu lub wezwaniu.")
 
-    repo.dodaj_zdarzenie(sid, body.typ, body.data, body.nowy_termin, payload,
-                         body.inicjaly or None)
+    # zamknięcie / wznowienie: w historii zawsze login administratora (nie dane z przeglądarki)
+    inicjaly = u.login if body.typ in terminy.TYLKO_ADMIN else body.inicjaly or None
+    repo.dodaj_zdarzenie(sid, body.typ, body.data, body.nowy_termin, payload, inicjaly)
     return _sprawa(sid, d)
 
 
@@ -145,7 +189,7 @@ def sprawdz_anonimizacje(tekst: str) -> None:
 @router.post("/sprawy/{sid}/dokumenty", response_model=Dokument,
              status_code=status.HTTP_201_CREATED)
 async def dodaj_dokument(
-    sid: int, d: Dzis,
+    sid: int, d: Dzis, u: Zalogowany,
     plik: UploadFile = File(...),
     rodzaj: str = Form("INNE", max_length=RODZAJ_MAX),
     wydzial: str | None = Form(None, max_length=WYDZIAL_MAX),
@@ -154,16 +198,48 @@ async def dodaj_dokument(
     _sprawa(sid, d)
     nazwa, dane, odczyt = await _wczytaj_plik(plik)
     sprawdz_anonimizacje(odczyt.tekst)
-    return repo.zapisz_dokument(nazwa, dane, rodzaj.strip().upper() or "INNE", odczyt.metoda,
-                                odczyt.tekst, odczyt.ocr_pewnosc, sprawa_id=sid,
-                                wydzial=(wydzial or "").strip().upper() or None)
+    doc = repo.zapisz_dokument(nazwa, dane, rodzaj.strip().upper() or "INNE", odczyt.metoda,
+                               odczyt.tekst, odczyt.ocr_pewnosc, sprawa_id=sid,
+                               wydzial=(wydzial or "").strip().upper() or None)
+    # historia: kto i kiedy dodał dokument (login z sesji)
+    repo.dodaj_zdarzenie(sid, TypZdarzenia.DOKUMENT_DODANIE, d, inicjaly=u.login,
+                         payload={"dokument": doc.nazwa_pliku, "rodzaj": doc.rodzaj})
+    return doc
 
 
 @router.patch("/dokumenty/{did}", response_model=Dokument)
-async def popraw_tekst(did: int, body: DokumentPopraw):
-    if repo.dokument(did) is None:
+async def edytuj_dokument(did: int, body: DokumentPopraw, d: Dzis, admin: Administrator):
+    """Edycja tekstu / rodzaju / nazwy / wydziału dokumentu – administrator."""
+    doc = repo.dokument(did)
+    if doc is None:
         raise HTTPException(404, "Nie znaleziono dokumentu.")
-    sprawdz_anonimizacje(body.tekst)
-    repo.popraw_tekst(did, body.tekst)
+    pola = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    if "tekst" in pola and doc.sprawa_id is not None:  # baza wiedzy – bez anonimizacji
+        sprawdz_anonimizacje(pola["tekst"])
+    if "rodzaj" in pola:
+        pola["rodzaj"] = pola["rodzaj"].upper()
+    if "wydzial" in pola:
+        pola["wydzial"] = pola["wydzial"].upper() or None
+    stare = doc.model_dump()
+    pola = {k: v for k, v in pola.items() if v != stare[k]}
+    if not pola:
+        return doc
+    repo.edytuj_dokument(did, pola)
+    if doc.sprawa_id is not None:  # historia sprawy; tekst bez treści (długi, może być wrażliwy)
+        zmiany = {k: ([stare[k], v] if k != "tekst" else [len(stare[k]), len(v)]) for k, v in pola.items()}
+        repo.dodaj_zdarzenie(doc.sprawa_id, TypZdarzenia.DOKUMENT_ZMIANA, d, inicjaly=admin.login,
+                             payload={"dokument": doc.nazwa_pliku, "zmiany": zmiany})
     return repo.dokument(did)
+
+
+@router.delete("/dokumenty/{did}", status_code=status.HTTP_204_NO_CONTENT)
+async def usun_dokument(did: int, d: Dzis, admin: Administrator):
+    """Usunięcie dokumentu sprawy (np. wgrany omyłkowo) – administrator. Historia zdarzeń zostaje,
+    a usunięcie trafia do niej z loginem administratora."""
+    doc = repo.dokument(did)
+    if doc is None or not repo.usun_dokument(did):
+        raise HTTPException(404, "Nie znaleziono dokumentu.")
+    if doc.sprawa_id is not None:
+        repo.dodaj_zdarzenie(doc.sprawa_id, TypZdarzenia.DOKUMENT_USUNIECIE, d, inicjaly=admin.login,
+                             payload={"dokument": doc.nazwa_pliku, "rodzaj": doc.rodzaj})
 

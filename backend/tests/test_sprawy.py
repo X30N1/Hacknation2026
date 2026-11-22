@@ -160,6 +160,7 @@ def test_formaty_i_rozmiar(monkeypatch):
     assert client.post("/dokumenty/odczyt", files={"plik": ("w.txt", b"x" * 500)}).status_code == 413
 
 
+@pytest.mark.usefixtures("jako_admin")
 def test_serwer_odrzuca_niezamazany_pesel():
     sid = nowa()["id"]
     r = client.post(f"/sprawy/{sid}/dokumenty", data={"rodzaj": "ODPOWIEDZ"},
@@ -209,7 +210,7 @@ def test_import_xlsx_flagi():
     assert zdarzenie(sid, "PROJEKT").status_code == 409  # import zamknięty
 
 
-def test_odczyt_bez_zapisu_i_zapis_zanonimizowanego(tmp_path):
+def test_odczyt_bez_zapisu_i_zapis_zanonimizowanego():
     """Przepływ frontu: odczyt (nic nie trafia do bazy ani na dysk) → anonimizacja → zapis .txt."""
     from app.config import settings
     from app.storage import store
@@ -243,3 +244,79 @@ def test_odczyt_bez_zapisu_i_zapis_zanonimizowanego(tmp_path):
                     files={"plik": ("BKS.IV.1431.301.2026.txt", tekst.encode())}).json()
     assert d["tekst"] == tekst and "44051401359" not in d["tekst"]
     assert client.get(f"/sprawy/{s['id']}").json()["dokumenty"][0]["id"] == d["id"]
+
+
+def test_dokumenty_edycja_i_usuwanie_tylko_admin(request):
+    sid = nowa()["id"]
+    d = client.post(f"/sprawy/{sid}/dokumenty", data={"rodzaj": "INNE"},
+                    files={"plik": ("x.txt", "Treść".encode())}).json()
+    assert client.patch(f"/dokumenty/{d['id']}", json={"tekst": "Nowa"}).status_code == 403
+    assert client.delete(f"/dokumenty/{d['id']}").status_code == 403
+
+    request.getfixturevalue("jako_admin")
+    r = client.patch(f"/dokumenty/{d['id']}", json={"rodzaj": "odp_wydzialu", "wydzial": "wgk",
+                                                    "nazwa_pliku": "Odpowiedź WGK.txt", "tekst": "Poprawiona"})
+    assert r.status_code == 200
+    assert {k: r.json()[k] for k in ("rodzaj", "wydzial", "nazwa_pliku", "tekst")} == {
+        "rodzaj": "ODP_WYDZIALU", "wydzial": "WGK", "nazwa_pliku": "Odpowiedź WGK.txt", "tekst": "Poprawiona"}
+    assert client.patch(f"/dokumenty/{d['id']}", json={"wydzial": ""}).json()["wydzial"] is None
+    assert client.patch(f"/dokumenty/{d['id']}", json={"rodzaj": "ODP_WYDZIALU"}).status_code == 200  # bez zmian
+    assert client.delete(f"/dokumenty/{d['id']}").status_code == 204
+    sp = client.get(f"/sprawy/{sid}").json()
+    assert sp["dokumenty"] == [] and sp["status"] == "NOWY"  # wpisy audytowe nie zmieniają statusu
+    audyt = [z for z in sp["zdarzenia"] if z["typ"].startswith("DOKUMENT_")]
+    assert [(z["typ"], z["inicjaly"]) for z in audyt] == [
+        ("DOKUMENT_DODANIE", "test"),  # dodał urzędnik (login z sesji)
+        ("DOKUMENT_ZMIANA", "admin"), ("DOKUMENT_ZMIANA", "admin"), ("DOKUMENT_USUNIECIE", "admin")]
+    assert audyt[0]["payload"] == {"dokument": "x.txt", "rodzaj": "INNE"}
+    assert audyt[1]["payload"] == {"dokument": "x.txt", "zmiany": {
+        "rodzaj": ["INNE", "ODP_WYDZIALU"], "nazwa_pliku": ["x.txt", "Odpowiedź WGK.txt"],
+        "wydzial": [None, "WGK"], "tekst": [5, 10]}}
+    assert audyt[3]["payload"] == {"dokument": "Odpowiedź WGK.txt", "rodzaj": "ODP_WYDZIALU"}
+    assert client.delete(f"/dokumenty/{d['id']}").status_code == 404
+    # wpisów audytowych nie da się dodać ręcznie
+    assert client.post(f"/sprawy/{sid}/zdarzenia", json={"typ": "DOKUMENT_USUNIECIE", "data": "2026-11-20"}).status_code == 422
+
+
+def test_edycja_wniosku_tylko_admin(request):
+    s = nowa()
+    sid = s["id"]
+    assert client.patch(f"/sprawy/{sid}", json={"przedmiot": "Nowy"}).status_code == 403
+
+    request.getfixturevalue("jako_admin")
+    r = client.patch(f"/sprawy/{sid}", json={"przedmiot": "Wykaz dotacji", "wnioskodawca": "Anna Nowak",
+                                             "znak": "BKS.IV.1431.777.2026", "data_wplywu": "2026-11-15",
+                                             "inicjaly": ""}).json()
+    assert (r["przedmiot"], r["wnioskodawca"], r["znak"], r["nr"]) == ("Wykaz dotacji", "Anna Nowak", "BKS.IV.1431.777.2026", 777)
+    assert r["data_wplywu"] == "2026-11-15" and r["termin"] == "2026-11-29" and r["inicjaly"] is None
+    assert r["zdarzenia"][0]["typ"] == "REJESTRACJA" and r["zdarzenia"][0]["data"] == "2026-11-15"
+    zmiana = r["zdarzenia"][-1]
+    assert (zmiana["typ"], zmiana["inicjaly"]) == ("SPRAWA_ZMIANA", "admin")
+    assert zmiana["payload"]["zmiany"]["przedmiot"] == ["", "Wykaz dotacji"]
+    assert zmiana["payload"]["zmiany"]["data_wplywu"] == ["2026-11-16", "2026-11-15"]
+
+    inna = client.post("/sprawy", json={"znak": "BKS.IV.1431.778.2026", "data_wplywu": "2026-11-10"}).json()
+    assert client.patch(f"/sprawy/{inna['id']}", json={"znak": "BKS.IV.1431.777.2026"}).status_code == 409
+    assert client.patch(f"/sprawy/{sid}", json={"znak": "zly"}).status_code == 422
+    client.post(f"/sprawy/{sid}/zdarzenia", json={"typ": "PRZEKAZANIE", "data": "2026-11-17", "payload": {"wydzialy": ["WGK"]}})
+    assert client.patch(f"/sprawy/{sid}", json={"data_wplywu": "2026-11-18"}).status_code == 422  # po zdarzeniu
+
+
+def test_zamkniecie_i_wznowienie_tylko_admin(request):
+    sid = nowa()["id"]
+    client.post(f"/sprawy/{sid}/zdarzenia", json={"typ": "PRZEKAZANIE", "data": "2026-11-17", "payload": {"wydzialy": ["WGK"]}})
+    zamknij = {"typ": "ZAMKNIECIE", "data": "2026-11-18", "payload": {"powod": "Wniosek wycofany"}}
+    assert client.post(f"/sprawy/{sid}/zdarzenia", json=zamknij).status_code == 403
+
+    request.getfixturevalue("jako_admin")
+    assert client.post(f"/sprawy/{sid}/zdarzenia", json={**zamknij, "payload": {}}).status_code == 422  # bez powodu
+    r = client.post(f"/sprawy/{sid}/zdarzenia", json=zamknij).json()
+    assert (r["status"], r["pilnosc"], r["pozostalo_dni"]) == ("ZAMKNIETA", "ZAMKNIETA", None)
+    assert r["zdarzenia"][-1]["payload"] == {"powod": "Wniosek wycofany"}
+    assert r["zdarzenia"][-1]["inicjaly"] == "admin"  # login z sesji, nie z przeglądarki
+    assert sid not in [x["id"] for x in client.get("/sprawy", params={"otwarte": True}).json()]
+    assert client.post(f"/sprawy/{sid}/zdarzenia", json={"typ": "PRZEKAZANIE", "data": "2026-11-18",
+                                                         "payload": {"wydzialy": ["WE"]}}).status_code == 409
+    assert client.post(f"/sprawy/{sid}/zdarzenia", json=zamknij).status_code == 409  # już zamknięta
+    r = client.post(f"/sprawy/{sid}/zdarzenia", json={"typ": "WZNOWIENIE", "data": "2026-11-19"}).json()
+    assert r["status"] == "W_WYDZIALACH"  # status sprzed zamknięcia

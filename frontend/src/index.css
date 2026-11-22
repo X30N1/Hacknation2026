@@ -150,7 +150,7 @@ table.cal { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .status-DOPRECYZOWANIE { background: var(--violet-bg); border-color: #d3c1ec; color: var(--violet); }
 .status-PRZEDLUZONA { background: var(--orange-bg); border-color: #f0c999; color: var(--orange); }
 .status-PROJEKT_GOTOWY { background: var(--ok-bg); border-color: #a9d8b8; color: var(--ok); }
-.status-WYSLANA, .status-BEZ_ROZPOZNANIA { color: var(--closed); }
+.status-WYSLANA, .status-BEZ_ROZPOZNANIA, .status-ZAMKNIETA { color: var(--closed); }
 
 .flag-count { color: var(--orange); font-weight: 700; white-space: nowrap; cursor: help; }
 .flag-list { padding-left: 0; list-style: none; margin: 0; }
@@ -301,3 +301,5 @@ dialog.okno::backdrop { background: rgba(20, 28, 40, 0.45); }
 /* oczekiwanie na draft AI (jak przy odczycie wniosku) */
 .czekanie { border: 2px dashed var(--border); border-radius: 12px; padding: 32px 24px; text-align: center; }
 .czekanie p { margin: 0 0 8px; }
+.admin-akcje { margin-top: 12px; align-items: center; }
+.timeline li.audyt { color: var(--muted); }

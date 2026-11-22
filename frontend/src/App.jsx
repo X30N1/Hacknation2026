@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Route, Routes } from 'react-router-dom'
+import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api/client'
 import Archiwum from './pages/Archiwum'
 import Kalendarz from './pages/Kalendarz'
@@ -39,6 +39,7 @@ export default function App() {
   const [health, setHealth] = useState(null)
   // undefined = sprawdzam sesję, null = niezalogowany, obiekt = /auth/ja
   const [ja, setJa] = useState(undefined)
+  const navigate = useNavigate()
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null))
@@ -53,8 +54,15 @@ export default function App() {
     setJa(null)
   }
 
+  // Zakończone logowanie (ostatni krok na ekranie logowania) -> zawsze kalendarz,
+  // niezależnie od adresu sprzed wylogowania / wygaśnięcia sesji.
+  function poKrokuLogowania(nowe) {
+    setJa(nowe)
+    if (nowe?.stan === 'OK') navigate('/', { replace: true })
+  }
+
   if (ja === undefined) return <div className="auth-wrap"><span className="spinner" aria-label="Ładowanie" /></div>
-  if (ja === null || ja.stan !== 'OK') return <Logowanie ja={ja} onZmiana={setJa} />
+  if (ja === null || ja.stan !== 'OK') return <Logowanie ja={ja} onZmiana={poKrokuLogowania} />
 
   const nav = ja.rola === 'admin' ? [...NAV, { to: '/uzytkownicy', label: 'Użytkownicy' }] : NAV
 
@@ -93,7 +101,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Kalendarz />} />
           <Route path="/nowy" element={<NowyWniosek />} />
-          <Route path="/sprawy/:id" element={<Sprawa />} />
+          <Route path="/sprawy/:id" element={<Sprawa ja={ja} />} />
           <Route path="/archiwum" element={<Archiwum />} />
           <Route path="/konto" element={<Konto ja={ja} onZmiana={setJa} />} />
           {ja.rola === 'admin' && <Route path="/uzytkownicy" element={<Uzytkownicy ja={ja} onZmiana={setJa} />} />}

@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from app.routers.sprawy import Dzis, _sprawa, _wczytaj_plik
 from app.sprawy import archiwum, projekt, repo, wydzialy
 from app.sprawy.model import (
-    RODZAJE_WIEDZY, Dokument, DraftPisma, PodobnaSprawa, ProjektOdpowiedzi, SugestieWydzialow, TrafienieArchiwum,
+    RODZAJE_WIEDZY, Dokument, DraftPisma, PodobnaSprawa, ProjektPisma, SugestieWydzialow, TrafienieArchiwum,
     WiedzaDokument,
 )
 
@@ -50,13 +50,7 @@ async def do_rozlaczenia(request: Request, zadanie, co: float = 0.5):
             task.cancel()
 
 
-@router.post("/sprawy/{sid}/projekt", response_model=ProjektOdpowiedzi)
-async def projekt_odpowiedzi(sid: int, d: Dzis, request: Request):
-    """Projekt odpowiedzi na wniosek (= /draft z rodzajem ODPOWIEDZ)."""
-    return await do_rozlaczenia(request, projekt.przygotuj(_sprawa(sid, d), d))
-
-
-@router.post("/sprawy/{sid}/draft", response_model=ProjektOdpowiedzi)
+@router.post("/sprawy/{sid}/draft", response_model=ProjektPisma)
 async def draft_pisma(sid: int, body: DraftPisma, d: Dzis, request: Request):
     """Projekt pisma (odpowiedź, wezwanie, zapytanie do wydziałów, przedłużenie). Niczego nie zapisuje –
     urzędnik sprawdza projekt, anonimizuje go i dopiero wtedy zapisuje (POST /sprawy/{id}/dokumenty)."""

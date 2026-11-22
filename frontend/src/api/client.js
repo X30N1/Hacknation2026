@@ -85,14 +85,16 @@ export const api = {
   dodajZdarzenie: (id, dane) => http('POST', `/sprawy/${id}/zdarzenia`, dane),
   dodajDokument: (id, plik, rodzaj, wydzial) =>
     http('POST', `/sprawy/${id}/dokumenty`, form({ plik, rodzaj, wydzial })),
-  poprawTekst: (dokumentId, tekst) => http('PATCH', `/dokumenty/${dokumentId}`, { tekst }),
+  // tylko administrator
+  edytujDokument: (dokumentId, pola) => http('PATCH', `/dokumenty/${dokumentId}`, pola),
+  usunDokument: (dokumentId) => http('DELETE', `/dokumenty/${dokumentId}`),
+  edytujSprawe: (id, pola) => http('PATCH', `/sprawy/${id}`, pola),
   anonimizacjaTekstu: (tekst, wnioskodawca) => http('POST', '/anonimizacja', { tekst, wnioskodawca }),
   pobierzDocx: (dokumentId) => http('GET', `/dokumenty/${dokumentId}/docx`),
 
   // archiwum, ścieżka (wydziały), projekt odpowiedzi
   podobneSprawy: (id) => http('GET', `/sprawy/${id}/podobne`),
   sugestieWydzialow: (id) => http('GET', `/sprawy/${id}/wydzialy`),
-  projektOdpowiedzi: (id) => http('POST', `/sprawy/${id}/projekt`),
   // projekt pisma: { rodzaj: ODPOWIEDZ | WEZWANIE | PRZEKAZANIE | PRZEDLUZENIE, wydzialy?, nowy_termin? }
   draftPisma: (id, dane, signal) => http('POST', `/sprawy/${id}/draft`, dane, signal),
   szukajWArchiwum: (q) => http('GET', '/archiwum/szukaj' + qs({ q })),

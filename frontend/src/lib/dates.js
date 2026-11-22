@@ -6,7 +6,7 @@ export function parseISO(iso) {
   return Date.UTC(y, m - 1, d)
 }
 
-export function toISO(ms) {
+function toISO(ms) {
   return new Date(ms).toISOString().slice(0, 10)
 }
 

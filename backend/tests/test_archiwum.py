@@ -155,7 +155,7 @@ def test_projekt_odpowiedzi_z_szablonu_i_docx():
     client.post(f"/sprawy/{sid}/zdarzenia", json={"typ": "PRZEKAZANIE", "data": "2026-11-11",
                                                   "payload": {"wydzialy": ["BKB"]}})
     dokument(sid, "Koszt organizacji wyniósł 1 200 000 zł brutto.", "ODP_WYDZIALU", "BKB")
-    p = client.post(f"/sprawy/{sid}/projekt").json()
+    p = client.post(f"/sprawy/{sid}/draft", json={"rodzaj": "ODPOWIEDZ"}).json()
     assert p["llm_uzyty"] is False  # testy: tryb echo – szablon
     t = p["tekst"]
     assert t.startswith("PROJEKT – wymaga weryfikacji urzędnika")
@@ -170,7 +170,7 @@ def test_projekt_odpowiedzi_z_szablonu_i_docx():
     assert "attachment" in r.headers["content-disposition"]
 
     bez = sprawa(8, "Coś")
-    assert "brak wgranych odpowiedzi" in client.post(f"/sprawy/{bez}/projekt").json()["tekst"]
+    assert "brak wgranych odpowiedzi" in client.post(f"/sprawy/{bez}/draft", json={"rodzaj": "ODPOWIEDZ"}).json()["tekst"]
 
 
 def test_seed_nie_zapisuje_nieudanego_ocr(monkeypatch, tmp_path):
@@ -178,7 +178,7 @@ def test_seed_nie_zapisuje_nieudanego_ocr(monkeypatch, tmp_path):
     (tmp_path / "Wniosek - skan.pdf").write_bytes(b"%PDF")
     wyniki = iter([ekstrakcja.Odczyt("", Metoda.OCR, 0.0),
                    ekstrakcja.Odczyt("Odczytany wniosek", Metoda.OCR, None)])
-    monkeypatch.setattr(ekstrakcja, "odczytaj", lambda nazwa, dane: next(wyniki))
+    monkeypatch.setattr(ekstrakcja, "odczytaj", lambda *_: next(wyniki))
     assert import_archiwum.importuj_pisma(tmp_path) == (0, 1)
     assert import_archiwum.importuj_pisma(tmp_path) == (1, 0)
 

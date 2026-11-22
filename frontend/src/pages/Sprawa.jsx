@@ -136,6 +136,32 @@ function OknoAkcji({ akcja, sprawa, onWybierz, onAnuluj }) {
   )
 }
 
+// Opis wpisów audytowych (dodanie dokumentu, zmiany administratora) w historii sprawy.
+const POLE = {
+  rodzaj: 'rodzaj', nazwa_pliku: 'nazwa', wydzial: 'wydział', znak: 'znak', data_wplywu: 'data wpływu',
+  wnioskodawca: 'wnioskodawca', przedmiot: 'przedmiot', inicjaly: 'osoba prowadząca',
+}
+const skroc = (v) => (v == null || v === '' ? '—' : String(v).length > 60 ? `${String(v).slice(0, 60)}…` : String(v))
+function wartosc(pole, v) {
+  if (pole === 'rodzaj') return RODZAJ_DOKUMENTU[v] || v
+  if (pole === 'data_wplywu') return v ? formatPL(v) : '—'
+  return skroc(v)
+}
+
+function OpisAudytu({ e }) {
+  const p = e.payload || {}
+  const zmiany = Object.entries(p.zmiany || {}).map(([pole, [stare, nowe]]) =>
+    pole === 'tekst' ? `treść (${stare} → ${nowe} znaków)` : `${POLE[pole] || pole}: ${wartosc(pole, stare)} → ${wartosc(pole, nowe)}`)
+  return (
+    <>
+      {p.dokument && <> „{p.dokument}”</>}
+      {p.rodzaj && <> ({RODZAJ_DOKUMENTU[p.rodzaj] || p.rodzaj})</>}
+      {zmiany.length > 0 && <span className="muted"> – {zmiany.join('; ')}</span>}
+    </>
+  )
+}
+const AUDYT = ['DOKUMENT_DODANIE', 'DOKUMENT_ZMIANA', 'DOKUMENT_USUNIECIE', 'SPRAWA_ZMIANA']
+
 function PodobneSprawy({ sprawa }) {
   const [lista, setLista] = useState(null)
   const [blad, setBlad] = useState(null)
@@ -226,11 +252,14 @@ function SugerowaneWydzialy({ sprawa, onPrzekaz, onLista }) {
   )
 }
 
-function Dokument({ dok, onZapisz }) {
+// Dokument sprawy. Edycja (tekst, rodzaj, nazwa, wydział) i usuwanie – tylko administrator.
+function Dokument({ dok, admin, onZapisz, onUsun }) {
   const [edycja, setEdycja] = useState(false)
-  const [tekst, setTekst] = useState(dok.tekst)
+  const [pola, setPola] = useState(null)
   const [blad, setBlad] = useState(null)
+  const [usuwanie, setUsuwanie] = useState(false)
   const nazwa = bezRozszerzenia(dok.nazwa_pliku)
+  const rodzaje = RODZAJE_W_SPRAWIE.includes(dok.rodzaj) ? RODZAJE_W_SPRAWIE : [dok.rodzaj, ...RODZAJE_W_SPRAWIE]
 
   async function docx() {
     setBlad(null)
@@ -241,6 +270,13 @@ function Dokument({ dok, onZapisz }) {
     }
   }
 
+  function edytuj() {
+    setPola({ nazwa_pliku: dok.nazwa_pliku, rodzaj: dok.rodzaj, wydzial: dok.wydzial || '', tekst: dok.tekst })
+    setEdycja(true)
+  }
+
+  const pole = (k) => ({ value: pola[k], onChange: (e) => setPola({ ...pola, [k]: e.target.value }) })
+
   return (
     <div className={`doc doc-${dok.rodzaj}`}>
       <div className="doc-head">
@@ -250,7 +286,19 @@ function Dokument({ dok, onZapisz }) {
           <span className="doc-buttons">
             <button className="btn btn-small" onClick={docx}>Pobierz .docx</button>
             <button className="btn btn-small" onClick={() => pobierzTekst(dok.tekst, `${nazwa}.txt`)}>Pobierz .txt</button>
-            <button className="btn btn-small" onClick={() => setEdycja(true)}>Popraw tekst</button>
+            {admin && !usuwanie && (
+              <>
+                <button className="btn btn-small" onClick={edytuj}>Edytuj</button>
+                <button className="btn btn-small btn-danger" onClick={() => setUsuwanie(true)}>Usuń</button>
+              </>
+            )}
+            {admin && usuwanie && (
+              <>
+                <span className="hint">Usunąć dokument? Historia sprawy zostaje.</span>
+                <button className="btn btn-small btn-danger" onClick={async () => { if (!(await onUsun(dok.id))) setUsuwanie(false) }}>Tak, usuń</button>
+                <button className="btn btn-small" onClick={() => setUsuwanie(false)}>Nie</button>
+              </>
+            )}
           </span>
         )}
       </div>
@@ -258,10 +306,21 @@ function Dokument({ dok, onZapisz }) {
       <OcrBaner dokument={dok} />
       {edycja ? (
         <>
-          <textarea className="doc-text" rows={14} value={tekst} onChange={(e) => setTekst(e.target.value)} />
+          <div className="form-row">
+            <label className="field">Nazwa pliku<input required maxLength={200} {...pole('nazwa_pliku')} /></label>
+            <label className="field">Rodzaj
+              <select {...pole('rodzaj')}>
+                {rodzaje.map((r) => <option key={r} value={r}>{RODZAJ_DOKUMENTU[r] || r}</option>)}
+              </select>
+            </label>
+            <label className="field">Wydział (skrót)<input maxLength={20} placeholder="np. WGK" {...pole('wydzial')} /></label>
+          </div>
+          <textarea className="doc-text" rows={14} aria-label="Treść dokumentu" {...pole('tekst')} />
+          <p className="hint">Treść musi pozostać zanonimizowana – serwer odrzuci niezamazany PESEL lub numer dowodu.</p>
           <div className="actions">
-            <button className="btn" onClick={() => { setTekst(dok.tekst); setEdycja(false) }}>Anuluj</button>
-            <button className="btn btn-primary" onClick={async () => { if (await onZapisz(dok.id, tekst)) setEdycja(false) }}>Zapisz tekst</button>
+            <button className="btn" onClick={() => setEdycja(false)}>Anuluj</button>
+            <button className="btn btn-primary" disabled={!pola.nazwa_pliku.trim() || !pola.tekst.trim()}
+              onClick={async () => { if (await onZapisz(dok.id, pola)) setEdycja(false) }}>Zapisz zmiany</button>
           </div>
         </>
       ) : (
@@ -271,7 +330,59 @@ function Dokument({ dok, onZapisz }) {
   )
 }
 
-export default function Sprawa() {
+// Administrator: poprawa danych wniosku.
+function EdycjaSprawy({ sprawa, onZapisz, onAnuluj }) {
+  const [dane, setDane] = useState({
+    znak: sprawa.znak, data_wplywu: sprawa.data_wplywu, wnioskodawca: sprawa.wnioskodawca,
+    przedmiot: sprawa.przedmiot, inicjaly: sprawa.inicjaly || '',
+  })
+  const pole = (k) => ({ value: dane[k], onChange: (e) => setDane({ ...dane, [k]: e.target.value }) })
+  return (
+    <form className="action-form" onSubmit={(e) => { e.preventDefault(); onZapisz(dane) }}>
+      <strong>Edycja danych wniosku</strong>
+      <label className="field">Znak sprawy<input required pattern="BKS\.IV\.1431\.\d+\.\d{4}" {...pole('znak')} /></label>
+      <label className="field">Data wpływu<input type="date" required max={todayISO()} {...pole('data_wplywu')} /></label>
+      <label className="field">Wnioskodawca<input maxLength={300} {...pole('wnioskodawca')} /></label>
+      <label className="field">Przedmiot<textarea rows={3} maxLength={2000} {...pole('przedmiot')} /></label>
+      <label className="field">Osoba prowadząca (inicjały)<input maxLength={10} {...pole('inicjaly')} /></label>
+      <p className="hint">Zmiana daty wpływu przelicza termin.</p>
+      <div className="actions">
+        <button type="button" className="btn" onClick={onAnuluj}>Anuluj</button>
+        <button type="submit" className="btn btn-primary">Zapisz</button>
+      </div>
+    </form>
+  )
+}
+
+// Administrator: zamknięcie sprawy (z powodem) albo jej wznowienie.
+function ZamkniecieSprawy({ sprawa, onZapisz, onAnuluj }) {
+  const [powod, setPowod] = useState('')
+  const [data, setData] = useState(todayISO())
+  const wznow = sprawa.status === 'ZAMKNIETA'
+  return (
+    <form className="action-form" onSubmit={(e) => {
+      e.preventDefault()
+      onZapisz(wznow ? { typ: 'WZNOWIENIE', data } : { typ: 'ZAMKNIECIE', data, payload: { powod } })
+    }}>
+      <strong>{wznow ? 'Wznów sprawę' : 'Zamknij sprawę'}</strong>
+      <label className="field">Data<input type="date" required min={sprawa.data_wplywu} max={todayISO()} value={data} onChange={(e) => setData(e.target.value)} /></label>
+      {wznow ? (
+        <p className="hint">Sprawa wróci do statusu sprzed zamknięcia.</p>
+      ) : (
+        <label className="field">Powód zamknięcia
+          <textarea required rows={2} maxLength={500} value={powod} onChange={(e) => setPowod(e.target.value)}
+            placeholder="np. wniosek wycofany, zdublowana rejestracja" />
+        </label>
+      )}
+      <div className="actions">
+        <button type="button" className="btn" onClick={onAnuluj}>Anuluj</button>
+        <button type="submit" className={`btn ${wznow ? 'btn-primary' : 'btn-danger'}`}>{wznow ? 'Wznów' : 'Zamknij sprawę'}</button>
+      </div>
+    </form>
+  )
+}
+
+export default function Sprawa({ ja }) {
   const { id } = useParams()
   const [s, setS] = useState(null)
   const [blad, setBlad] = useState(null)
@@ -279,6 +390,8 @@ export default function Sprawa() {
   const [okno, setOkno] = useState(null)        // okno wyboru: plik / draft AI / tylko historia
   const [panel, setPanel] = useState(null)      // { typ: 'dokument', zadanie, cel, zdarzenie? } | { typ: 'projekt', zadanie, zdarzenie }
   const [jednostki, setJednostki] = useState([]) // lista wydziałów UMB (z sugestii)
+  const [adminForm, setAdminForm] = useState(null) // 'edycja' | 'zamkniecie' (tylko administrator)
+  const admin = ja?.rola === 'admin'
   const wyborPliku = useRef(null)
   const wyborCel = useRef(null)                 // co otworzyło wybór pliku: { cel, akcja?, zdarzenie? }
   const zapisanyDok = useRef(false)             // dokument już zapisany – przy ponowieniu tylko zdarzenie
@@ -365,16 +478,24 @@ export default function Sprawa() {
     }
   }
 
-  async function zapiszTekst(dokId, tekst) {
+  // akcje administratora: true = udało się (formularz / potwierdzenie może się zamknąć)
+  async function adminAkcja(fn) {
     setBlad(null)
     try {
-      await api.poprawTekst(dokId, tekst)
+      await fn()
       await wczytaj()
       return true
     } catch (e) {
       setBlad(e.message)
       return false
     }
+  }
+
+  const zapiszDokumentAdmin = (dokId, pola) => adminAkcja(() => api.edytujDokument(dokId, pola))
+  const usunDokument = (dokId) => adminAkcja(() => api.usunDokument(dokId))
+  const zapiszSprawe = async (pola) => { if (await adminAkcja(() => api.edytujSprawe(id, pola))) setAdminForm(null) }
+  const zamknijSprawe = async (dane) => {
+    if (await adminAkcja(() => api.dodajZdarzenie(id, { inicjaly: ja.login.slice(0, 20), ...dane }))) setAdminForm(null)
   }
 
   function kliknij(a) {
@@ -415,6 +536,23 @@ export default function Sprawa() {
             <dt>Data odpowiedzi</dt><dd>{formatPL(s.data_odpowiedzi)}</dd>
             <dt>Osoba prowadząca</dt><dd>{s.inicjaly || '—'}</dd>
           </dl>
+          {admin && s.zrodlo !== 'import' && (
+            adminForm === 'edycja' ? (
+              <EdycjaSprawy sprawa={s} onZapisz={zapiszSprawe} onAnuluj={() => setAdminForm(null)} />
+            ) : adminForm === 'zamkniecie' ? (
+              <ZamkniecieSprawy sprawa={s} onZapisz={zamknijSprawe} onAnuluj={() => setAdminForm(null)} />
+            ) : (
+              <div className="action-buttons admin-akcje">
+                <span className="pill pill-muted">Administrator</span>
+                <button type="button" className="btn btn-small" onClick={() => setAdminForm('edycja')}>Edytuj dane wniosku</button>
+                {s.status === 'ZAMKNIETA' ? (
+                  <button type="button" className="btn btn-small" onClick={() => setAdminForm('zamkniecie')}>Wznów sprawę</button>
+                ) : !['WYSLANA', 'BEZ_ROZPOZNANIA'].includes(s.status) && (
+                  <button type="button" className="btn btn-small btn-danger" onClick={() => setAdminForm('zamkniecie')}>Zamknij sprawę</button>
+                )}
+              </div>
+            )
+          )}
           <h3>Uwagi do danych</h3>
           <Flagi flagi={s.flagi} />
         </div>
@@ -438,11 +576,13 @@ export default function Sprawa() {
           <h3>Historia</h3>
           <ol className="timeline">
             {(s.zdarzenia || []).map((e) => (
-              <li key={e.id}>
+              <li key={e.id} className={AUDYT.includes(e.typ) ? 'audyt' : undefined}>
                 <span className="nowrap">{formatPL(e.data)}</span> – {ZDARZENIE[e.typ] || e.typ}
                 {e.nowy_termin && <> → nowy termin {formatPL(e.nowy_termin)}</>}
                 {e.payload?.wydzialy?.length > 0 && <> ({e.payload.wydzialy.join(', ')})</>}
                 {e.payload?.wydzial && <> ({e.payload.wydzial})</>}
+                {e.payload?.powod && <> – {e.payload.powod}</>}
+                {AUDYT.includes(e.typ) && <OpisAudytu e={e} />}
                 {e.inicjaly && <span className="muted"> · {e.inicjaly}</span>}
               </li>
             ))}
@@ -475,7 +615,10 @@ export default function Sprawa() {
           <button type="button" className="btn btn-primary" disabled={zajete} onClick={() => wybierzPlik('dokument')}>Dodaj dokument</button>
         </div>
         {s.dokumenty?.length ? (
-          s.dokumenty.map((dok) => <Dokument key={`${dok.id}-${dok.tekst.length}`} dok={dok} onZapisz={zapiszTekst} />)
+          s.dokumenty.map((dok) => (
+            <Dokument key={`${dok.id}-${dok.tekst.length}-${dok.rodzaj}-${dok.nazwa_pliku}`} dok={dok} admin={admin}
+              onZapisz={zapiszDokumentAdmin} onUsun={usunDokument} />
+          ))
         ) : (
           <p className="muted">Brak dokumentów w sprawie.</p>
         )}

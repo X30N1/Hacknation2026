@@ -86,7 +86,7 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - data_wplywu: str
 - termin: str | null (null gdy wstrzymany)
 - termin_wstrzymany: bool
-- status: "NOWY" | "W_WYDZIALACH" | "DOPRECYZOWANIE" | "PRZEDLUZONA" | "PROJEKT_GOTOWY" | "WYSLANA" | "BEZ_ROZPOZNANIA"
+- status: "NOWY" | "W_WYDZIALACH" | "DOPRECYZOWANIE" | "PRZEDLUZONA" | "PROJEKT_GOTOWY" | "WYSLANA" | "BEZ_ROZPOZNANIA" | "ZAMKNIETA" (zamknięta przez administratora)
 - pilnosc: "PRZEKROCZONY" | "DZIS" | "JUTRO" | "WKROTCE" (≤ 3 dni) | "BRAK" | "ZAMKNIETA"
 - pozostalo_dni: int | null
 - przedluzenie_dni: int | null
@@ -138,7 +138,7 @@ Body JSON:
 - typ: str (wymagany)
 - data: str (wymagana; nie przed wpływem, nie z przyszłości)
 - nowy_termin: str | null (wymagany dla PRZEDLUZENIE, później niż obecny termin)
-- payload: obiekt (PRZEKAZANIE wymaga `wydzialy`: niepusta lista)
+- payload: obiekt (PRZEKAZANIE wymaga `wydzialy`: niepusta lista, ZAMKNIECIE – `powod`)
 - inicjaly: str | null
 
 Dozwolone przejścia (409 w pozostałych przypadkach i dla spraw z importu):
@@ -153,6 +153,14 @@ Dozwolone przejścia (409 w pozostałych przypadkach i dla spraw z importu):
 | PROJEKT | W_WYDZIALACH, PRZEDLUZONA |
 | WYSLANO | PROJEKT_GOTOWY |
 | BEZ_ROZPOZNANIA | DOPRECYZOWANIE |
+| ZAMKNIECIE (tylko administrator, inaczej 403) | każdy otwarty status |
+| WZNOWIENIE (tylko administrator) | ZAMKNIETA – przywraca status sprzed zamknięcia |
+
+Przy zamknięciu / wznowieniu `inicjaly` = login administratora z sesji. Wpisy audytowe
+`DOKUMENT_DODANIE` (`{ dokument, rodzaj }`, każdy zapis `POST /sprawy/{id}/dokumenty`, login dodającego),
+`DOKUMENT_ZMIANA` (`payload: { dokument, zmiany: { pole: [stare, nowe] } }`, dla `tekst` – liczba znaków),
+`DOKUMENT_USUNIECIE` (`{ dokument, rodzaj }`) i `SPRAWA_ZMIANA` (`{ zmiany }`) tworzy serwer przy edycji
+i usuwaniu (`inicjaly` = login użytkownika); nie zmieniają statusu, a POST ich nie przyjmuje (422).
 
 Zwraca 201 + Sprawa (szczegóły). Aplikacja niczego nie wysyła – zdarzenie tylko zapisuje, co zrobił urzędnik.
 
@@ -193,9 +201,17 @@ numerem PESEL lub numerem dowodu – ostatnia linia obrony. Rodzaje używane prz
 WNIOSEK, DOPRECYZOWANIE, ZAPYTANIE (do wydziału), ODP_WYDZIALU (z `wydzial`), PROJEKT, ODPOWIEDZ, KWERENDA, WEZWANIE, INNE.
 Zwraca 201 + Dokument.
 
-## PATCH /dokumenty/{id}
-Body JSON: `{ "tekst": str }` – ręczna poprawka tekstu (np. po niepewnym OCR). Ta sama blokada
-PESEL / dowodu co przy zapisie. Zwraca Dokument.
+## PATCH /dokumenty/{id} (tylko administrator, inaczej 403)
+Body JSON (pominięte pola bez zmian): `{ tekst?, rodzaj?, nazwa_pliku?, wydzial? }` (`wydzial: ""` = bez
+wydziału). Tekst dokumentu sprawy – ta sama blokada PESEL / dowodu co przy zapisie. Zwraca Dokument.
+
+## DELETE /dokumenty/{id} (tylko administrator)
+204; usuwa dokument i plik. Historia zdarzeń sprawy zostaje.
+
+## PATCH /sprawy/{id} (tylko administrator)
+Body JSON (pominięte pola bez zmian): `{ znak?, data_wplywu?, wnioskodawca?, przedmiot?, inicjaly? }`.
+409 – znak zajęty; 422 – data wpływu z przyszłości albo późniejsza niż pierwsze zdarzenie. Zmiana
+daty wpływu przelicza termin. Zwraca Sprawa (szczegóły).
 
 ## GET /dokumenty/{id}/docx
 Tekst dokumentu jako plik Word (`Content-Disposition: attachment`).
@@ -228,8 +244,6 @@ Materiały: wniosek i doprecyzowanie (DOPRECYZOWANIE), pisma tego samego rodzaju
 (wzór stylu) i podstawy z bazy wiedzy. **Niczego nie zapisuje.** Dane wnioskodawcy nie trafiają do modelu.
 `{ tekst, llm_uzyty: bool, zrodla: [str], uwagi: [str] }`. Bez modelu – szablon pisma.
 Przerwanie zapytania przez klienta (np. „Anuluj” – abort) przerywa też generację w modelu.
-
-`POST /sprawy/{id}/projekt` = `draft` z rodzajem `ODPOWIEDZ` (zgodność wsteczna).
 
 ## GET /archiwum/szukaj?q=fraza
 Sprawy, dokumenty spraw i baza wiedzy: `[{ sprawa_id, znak, dokument_id, nazwa_pliku, rodzaj, data, fragment }]`

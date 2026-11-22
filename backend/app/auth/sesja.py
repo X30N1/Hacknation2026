@@ -66,7 +66,7 @@ Zalogowany = Annotated[repo.Uzytkownik, Depends(zalogowany)]
 
 def administrator(u: Zalogowany) -> repo.Uzytkownik:
     if u.rola != "admin":
-        raise HTTPException(403, "Tylko administrator może zarządzać użytkownikami.")
+        raise HTTPException(403, "Ta operacja jest dostępna tylko dla administratora.")
     return u
 
 

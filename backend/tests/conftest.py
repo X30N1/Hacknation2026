@@ -29,5 +29,14 @@ def isolated(monkeypatch, tmp_path, request):
 
 
 @pytest.fixture
+def jako_admin():
+    """Zalogowany administrator zamiast urzędnika (operacje tylko dla administratora)."""
+    from dataclasses import replace
+    app.dependency_overrides[zalogowany] = lambda: replace(TESTOWY, login="admin", rola="admin")
+    yield
+    app.dependency_overrides[zalogowany] = lambda: TESTOWY
+
+
+@pytest.fixture
 def anyio_backend():
     return "asyncio"

@@ -7,6 +7,7 @@ export const STATUS = {
   PROJEKT_GOTOWY: { label: 'Odpowiedź przygotowana', kod: 'd' },
   WYSLANA: { label: 'Odpowiedź wysłana', kod: 'e' },
   BEZ_ROZPOZNANIA: { label: 'Bez rozpoznania', kod: '' },
+  ZAMKNIETA: { label: 'Zamknięta (administrator)', kod: '' },
 }
 
 export const PILNOSC = {
@@ -28,6 +29,12 @@ export const ZDARZENIE = {
   PROJEKT: 'Projekt odpowiedzi gotowy',
   WYSLANO: 'Odpowiedź wysłana',
   BEZ_ROZPOZNANIA: 'Pozostawiono bez rozpoznania',
+  ZAMKNIECIE: 'Sprawa zamknięta przez administratora',
+  WZNOWIENIE: 'Sprawa wznowiona przez administratora',
+  DOKUMENT_DODANIE: 'Dodano dokument',
+  DOKUMENT_ZMIANA: 'Zmieniono dokument',
+  DOKUMENT_USUNIECIE: 'Usunięto dokument',
+  SPRAWA_ZMIANA: 'Zmieniono dane wniosku',
 }
 
 export const RODZAJ_DOKUMENTU = {

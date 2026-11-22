@@ -18,7 +18,7 @@ from app import llm_client
 from app.config import settings
 from app.prompts import SYSTEM_PROMPT
 from app.sprawy import archiwum, wydzialy
-from app.sprawy.model import ProjektOdpowiedzi, RodzajPisma, SprawaSzczegoly, TypZdarzenia
+from app.sprawy.model import ProjektPisma, RodzajPisma, SprawaSzczegoly, TypZdarzenia
 from app.sprawy.terminy import DOPRECYZOWANIE_DNI
 
 log = logging.getLogger(__name__)
@@ -226,9 +226,9 @@ async def _z_llm(rodzaj: RodzajPisma, s: SprawaSzczegoly, dzis: date, m: Materia
 
 
 async def przygotuj(s: SprawaSzczegoly, dzis: date, rodzaj: RodzajPisma = RodzajPisma.ODPOWIEDZ,
-                    wydzialy_: list[str] | None = None, nowy_termin: date | None = None) -> ProjektOdpowiedzi:
+                    adresaci: list[str] | None = None, nowy_termin: date | None = None) -> ProjektPisma:
     pismo = PISMA[rodzaj]
-    p = Parametry(wydzialy=[w.strip().upper() for w in wydzialy_ or [] if w.strip()], nowy_termin=nowy_termin)
+    p = Parametry(wydzialy=[w.strip().upper() for w in adresaci or [] if w.strip()], nowy_termin=nowy_termin)
     m = _materialy(s)
     wzory = archiwum.pisma_podobnych(s.id, dzis, pismo.wzor)
     wiedza = archiwum.fragmenty_wiedzy(f"{archiwum.tekst_sprawy(s.id)} {pismo.wiedza}")
@@ -260,4 +260,4 @@ async def przygotuj(s: SprawaSzczegoly, dzis: date, rodzaj: RodzajPisma = Rodzaj
     if not tekst.startswith(NAGLOWEK):
         tekst = f"{NAGLOWEK}\n\n{tekst}"
     tekst = tekst.replace(ZNACZNIK, s.wnioskodawca or "[DO UZUPEŁNIENIA – adresat]")
-    return ProjektOdpowiedzi(tekst=tekst, llm_uzyty=uzyty, zrodla=zrodla, uwagi=uwagi)
+    return ProjektPisma(tekst=tekst, llm_uzyty=uzyty, zrodla=zrodla, uwagi=uwagi)
