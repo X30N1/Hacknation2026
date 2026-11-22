@@ -7,6 +7,7 @@ export const STATUS = {
   PROJEKT_GOTOWY: { label: 'Odpowiedź przygotowana', kod: 'd' },
   WYSLANA: { label: 'Odpowiedź wysłana', kod: 'e' },
   BEZ_ROZPOZNANIA: { label: 'Bez rozpoznania', kod: '' },
+  ZAMKNIETA: { label: 'Zamknięta (administrator)', kod: '' },
 }
 
 export const PILNOSC = {
@@ -28,6 +29,12 @@ export const ZDARZENIE = {
   PROJEKT: 'Projekt odpowiedzi gotowy',
   WYSLANO: 'Odpowiedź wysłana',
   BEZ_ROZPOZNANIA: 'Pozostawiono bez rozpoznania',
+  ZAMKNIECIE: 'Sprawa zamknięta przez administratora',
+  WZNOWIENIE: 'Sprawa wznowiona przez administratora',
+  DOKUMENT_DODANIE: 'Dodano dokument',
+  DOKUMENT_ZMIANA: 'Zmieniono dokument',
+  DOKUMENT_USUNIECIE: 'Usunięto dokument',
+  SPRAWA_ZMIANA: 'Zmieniono dane wniosku',
 }
 
 export const RODZAJ_DOKUMENTU = {
@@ -37,6 +44,8 @@ export const RODZAJ_DOKUMENTU = {
   ODPOWIEDZ: 'Odpowiedź',
   KWERENDA: 'Kwerenda',
   WEZWANIE: 'Wezwanie do doprecyzowania',
+  DOPRECYZOWANIE: 'Doprecyzowanie wniosku',
+  ZAPYTANIE: 'Zapytanie do wydziału',
   INNE: 'Inny dokument',
   // baza wiedzy
   USTAWA: 'Ustawa / przepis',
@@ -46,7 +55,7 @@ export const RODZAJ_DOKUMENTU = {
   SPRAWA: 'Sprawa',
 }
 
-export const RODZAJE_W_SPRAWIE = ['ODP_WYDZIALU', 'WNIOSEK', 'ODPOWIEDZ', 'KWERENDA', 'WEZWANIE', 'INNE']
+export const RODZAJE_W_SPRAWIE = ['ODP_WYDZIALU', 'WNIOSEK', 'DOPRECYZOWANIE', 'ZAPYTANIE', 'ODPOWIEDZ', 'KWERENDA', 'WEZWANIE', 'INNE']
 export const RODZAJE_WIEDZY = ['USTAWA', 'ZARZADZENIE', 'WZOR', 'ARCHIWUM']
 
 export const ZRODLO_SUGESTII = {

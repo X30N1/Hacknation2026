@@ -2,8 +2,56 @@
 
 - Frontend woła API z prefiksem `/api` (proxy Vite obcina go w trybie dev) – backend ścieżek bez prefiksu.
 - Daty w sprawach: `RRRR-MM-DD` (ISO).
-- Błędy: `{"blad": "komunikat po polsku", "detail": ...}` z kodem HTTP (404, 409, 413, 415, 422).
+- Błędy: `{"blad": "komunikat po polsku", "detail": ...}` z kodem HTTP (401, 403, 404, 409, 413, 415, 422, 429).
 - Interaktywna dokumentacja: `http://localhost:8000/docs`.
+- Wszystkie endpointy poza `/health` i `/auth/*` wymagają pełnego zalogowania (ciasteczko `sesja`,
+  HttpOnly, SameSite=Strict). Brak sesji lub niedokończone logowanie: 401.
+
+---
+
+# Logowanie
+
+Pierwsze uruchomienie tworzy konto **admin / admin** z obowiązkową zmianą hasła.
+Po haśle logowanie przechodzi przez etapy (`stan` w odpowiedzi):
+
+| stan | co dalej |
+|---|---|
+| `DRUGI_SKLADNIK` | `POST /auth/totp/weryfikuj` albo klucz (`/auth/klucz/logowanie/*`) – przed zmianą hasła, żeby samo hasło nie wystarczyło do przejęcia konta |
+| `ZMIEN_HASLO` | `POST /auth/haslo` – pierwsze logowanie lub hasło tymczasowe od administratora |
+| `KONFIGURUJ_2FA` | `POST /auth/totp/nowy` + `/auth/totp/potwierdz` albo `/auth/klucz/rejestracja/*` (gdy administrator włączył wymóg 2FA) |
+| `OK` | pełny dostęp; sesja na `sesja_godziny` (wcześniej `sesja_wstepna_minuty`) |
+
+Obiekt **Ja**: `{ login, rola: "admin" | "urzednik", stan, totp: bool, klucze: int, wymagaj_2fa, min_dlugosc_hasla }`.
+
+- `POST /auth/login` `{ login, haslo }` → Ja + ciasteczko. 401 zły login/hasło (ten sam komunikat),
+  429 konto zablokowane po `max_prob` nieudanych próbach (hasło lub kod TOTP) na `blokada_minut`.
+- `GET /auth/ja` → Ja (401 bez sesji). `POST /auth/wyloguj` → 204.
+- `POST /auth/haslo` `{ stare, nowe }` → Ja. Wylogowuje pozostałe sesje użytkownika.
+- `POST /auth/totp/nowy` → `{ sekret, uri, qr_svg }` (sekret aktywny dopiero po potwierdzeniu).
+- `POST /auth/totp/potwierdz` / `POST /auth/totp/weryfikuj` `{ kod }` → Ja. Kod jednorazowy (powtórzenie odrzucane).
+- `DELETE /auth/totp` → Ja (409, gdy to jedyny drugi składnik).
+- Klucze WebAuthn (JSON zgodny z `PublicKeyCredential` w base64url):
+  `POST /auth/klucz/rejestracja/opcje` → opcje `navigator.credentials.create`;
+  `POST /auth/klucz/rejestracja` `{ credential, nazwa }` → Ja;
+  `POST /auth/klucz/logowanie/opcje` → opcje `navigator.credentials.get`;
+  `POST /auth/klucz/logowanie` `{ credential }` → Ja;
+  `GET /auth/klucze` → `[{ id, nazwa, utworzono }]`; `DELETE /auth/klucze/{id}` → Ja.
+
+## Użytkownicy (tylko administrator, inaczej 403)
+Obiekt: `{ id, login, rola, musi_zmienic_haslo, totp, klucze, zablokowany_do, utworzono }`.
+- `GET /uzytkownicy`
+- `POST /uzytkownicy` `{ login, haslo, rola }` → 201 (hasło tymczasowe, zmiana przy pierwszym logowaniu;
+  login: 3–40 znaków `a-z 0-9 . _ -`, zapisywany małymi literami; 409 gdy istnieje)
+- `DELETE /uzytkownicy/{id}` → 204 (409: własne konto albo ostatni administrator)
+- `POST /uzytkownicy/{id}/haslo` `{ haslo }` → hasło tymczasowe, odblokowanie konta, wylogowanie użytkownika
+- `POST /uzytkownicy/{id}/reset-2fa` → usuwa TOTP i klucze (zgubiony telefon / klucz), wylogowanie użytkownika
+
+## Ustawienia bezpieczeństwa (tylko administrator, inaczej 403)
+Obiekt: `{ wymagaj_2fa: bool, min_dlugosc_hasla: int (0–128, 0 = bez wymogu) }`. Domyślnie `false` / `0`
+(hasło nie może być tylko puste ani równe loginowi / hasłu startowemu).
+- `GET /ustawienia/bezpieczenstwo`
+- `PUT /ustawienia/bezpieczenstwo` → zapisany obiekt. Działa od razu: po włączeniu 2FA konta bez drugiego
+  składnika wracają do etapu `KONFIGURUJ_2FA`; minimalna długość dotyczy kolejnych zmian haseł.
 
 ## GET /health
 
@@ -38,7 +86,7 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - data_wplywu: str
 - termin: str | null (null gdy wstrzymany)
 - termin_wstrzymany: bool
-- status: "NOWY" | "W_WYDZIALACH" | "DOPRECYZOWANIE" | "PRZEDLUZONA" | "PROJEKT_GOTOWY" | "WYSLANA" | "BEZ_ROZPOZNANIA"
+- status: "NOWY" | "W_WYDZIALACH" | "DOPRECYZOWANIE" | "PRZEDLUZONA" | "PROJEKT_GOTOWY" | "WYSLANA" | "BEZ_ROZPOZNANIA" | "ZAMKNIETA" (zamknięta przez administratora)
 - pilnosc: "PRZEKROCZONY" | "DZIS" | "JUTRO" | "WKROTCE" (≤ 3 dni) | "BRAK" | "ZAMKNIETA"
 - pozostalo_dni: int | null
 - przedluzenie_dni: int | null
@@ -65,7 +113,7 @@ wartości z arkusza „jak są”, a problemy opisują `flagi`.
 - nazwa_pliku: str
 - wydzial: str | null
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
-- ocr_pewnosc: float | null (tylko OCR: null = wszystkie strony odczytane – GLM-OCR nie podaje pewności; 0–1 = odsetek odczytanych stron, 0 = serwer OCR niedostępny)
+- ocr_pewnosc: float | null (0–1, tylko OCR: średnia pewność rozpoznanych słów; 0 = OCR niedostępny lub nic nie odczytano)
 - tekst: str
 
 ## GET /sprawy
@@ -90,7 +138,7 @@ Body JSON:
 - typ: str (wymagany)
 - data: str (wymagana; nie przed wpływem, nie z przyszłości)
 - nowy_termin: str | null (wymagany dla PRZEDLUZENIE, później niż obecny termin)
-- payload: obiekt (PRZEKAZANIE wymaga `wydzialy`: niepusta lista)
+- payload: obiekt (PRZEKAZANIE wymaga `wydzialy`: niepusta lista, ZAMKNIECIE – `powod`)
 - inicjaly: str | null
 
 Dozwolone przejścia (409 w pozostałych przypadkach i dla spraw z importu):
@@ -105,6 +153,14 @@ Dozwolone przejścia (409 w pozostałych przypadkach i dla spraw z importu):
 | PROJEKT | W_WYDZIALACH, PRZEDLUZONA |
 | WYSLANO | PROJEKT_GOTOWY |
 | BEZ_ROZPOZNANIA | DOPRECYZOWANIE |
+| ZAMKNIECIE (tylko administrator, inaczej 403) | każdy otwarty status |
+| WZNOWIENIE (tylko administrator) | ZAMKNIETA – przywraca status sprzed zamknięcia |
+
+Przy zamknięciu / wznowieniu `inicjaly` = login administratora z sesji. Wpisy audytowe
+`DOKUMENT_DODANIE` (`{ dokument, rodzaj }`, każdy zapis `POST /sprawy/{id}/dokumenty`, login dodającego),
+`DOKUMENT_ZMIANA` (`payload: { dokument, zmiany: { pole: [stare, nowe] } }`, dla `tekst` – liczba znaków),
+`DOKUMENT_USUNIECIE` (`{ dokument, rodzaj }`) i `SPRAWA_ZMIANA` (`{ zmiany }`) tworzy serwer przy edycji
+i usuwaniu (`inicjaly` = login użytkownika); nie zmieniają statusu, a POST ich nie przyjmuje (422).
 
 Zwraca 201 + Sprawa (szczegóły). Aplikacja niczego nie wysyła – zdarzenie tylko zapisuje, co zrobił urzędnik.
 
@@ -122,7 +178,7 @@ jego zanonimizowany tekst jako plik Word.
 ### Obiekt Odczyt
 - nazwa_pliku: str
 - metoda: "DOCX" | "PDF_TEXT" | "OCR" | "RECZNA"
-- ocr_pewnosc: float | null (tylko OCR: null = wszystkie strony odczytane – GLM-OCR nie podaje pewności; 0–1 = odsetek odczytanych stron, 0 = serwer OCR niedostępny)
+- ocr_pewnosc: float | null (0–1, tylko OCR: średnia pewność rozpoznanych słów; 0 = OCR niedostępny lub nic nie odczytano)
 - tekst: str
 
 ## POST /dokumenty/odczyt
@@ -142,12 +198,20 @@ Zwraca:
 multipart/form-data: `plik`, `rodzaj` (domyślnie "INNE"), `wydzial` (opcjonalnie).
 Frontend wysyła tu wyłącznie zanonimizowany `.txt`. Serwer odrzuca (422) tekst z niezamazanym
 numerem PESEL lub numerem dowodu – ostatnia linia obrony. Rodzaje używane przez frontend:
-WNIOSEK, ODP_WYDZIALU (z `wydzial`), PROJEKT, ODPOWIEDZ, KWERENDA, WEZWANIE, INNE.
+WNIOSEK, DOPRECYZOWANIE, ZAPYTANIE (do wydziału), ODP_WYDZIALU (z `wydzial`), PROJEKT, ODPOWIEDZ, KWERENDA, WEZWANIE, INNE.
 Zwraca 201 + Dokument.
 
-## PATCH /dokumenty/{id}
-Body JSON: `{ "tekst": str }` – ręczna poprawka tekstu (np. po niepewnym OCR). Ta sama blokada
-PESEL / dowodu co przy zapisie. Zwraca Dokument.
+## PATCH /dokumenty/{id} (tylko administrator, inaczej 403)
+Body JSON (pominięte pola bez zmian): `{ tekst?, rodzaj?, nazwa_pliku?, wydzial? }` (`wydzial: ""` = bez
+wydziału). Tekst dokumentu sprawy – ta sama blokada PESEL / dowodu co przy zapisie. Zwraca Dokument.
+
+## DELETE /dokumenty/{id} (tylko administrator)
+204; usuwa dokument i plik. Historia zdarzeń sprawy zostaje.
+
+## PATCH /sprawy/{id} (tylko administrator)
+Body JSON (pominięte pola bez zmian): `{ znak?, data_wplywu?, wnioskodawca?, przedmiot?, inicjaly? }`.
+409 – znak zajęty; 422 – data wpływu z przyszłości albo późniejsza niż pierwsze zdarzenie. Zmiana
+daty wpływu przelicza termin. Zwraca Sprawa (szczegóły).
 
 ## GET /dokumenty/{id}/docx
 Tekst dokumentu jako plik Word (`Content-Disposition: attachment`).
@@ -169,10 +233,17 @@ próg pokrycia ważonych (IDF) słów przedmiotu. Zwraca listę:
 `zrodlo`: `ARCHIWUM` (odpowiadał w podobnych sprawach) | `LLM` (wybór z zamkniętej listy) |
 `SLOWA_KLUCZOWE`. Lista jednostek: BIP UM Bydgoszcz (wydziały i biura).
 
-## POST /sprawy/{id}/projekt
-Projekt pisma z odpowiedzi wydziałów (dokumenty ODP_WYDZIALU), z wzorem stylu z podobnych spraw
-i podstawami z bazy wiedzy. **Niczego nie zapisuje.** Dane wnioskodawcy nie trafiają do modelu.
+## POST /sprawy/{id}/draft
+Projekt pisma (draft AI) `{ rodzaj, wydzialy?: [str], nowy_termin?: RRRR-MM-DD }`:
+- `ODPOWIEDZ` – odpowiedź na wniosek z odpowiedzi wydziałów (dokumenty ODP_WYDZIALU),
+- `WEZWANIE` – wezwanie do doprecyzowania (pytania o niejasne części wniosku, 7 dni),
+- `PRZEKAZANIE` – wewnętrzne zapytanie do wydziałów (`wydzialy`, a gdy brak – z historii sprawy),
+- `PRZEDLUZENIE` – zawiadomienie o przedłużeniu terminu (art. 13 ust. 2 UDIP, `nowy_termin`).
+
+Materiały: wniosek i doprecyzowanie (DOPRECYZOWANIE), pisma tego samego rodzaju z podobnych spraw
+(wzór stylu) i podstawy z bazy wiedzy. **Niczego nie zapisuje.** Dane wnioskodawcy nie trafiają do modelu.
 `{ tekst, llm_uzyty: bool, zrodla: [str], uwagi: [str] }`. Bez modelu – szablon pisma.
+Przerwanie zapytania przez klienta (np. „Anuluj” – abort) przerywa też generację w modelu.
 
 ## GET /archiwum/szukaj?q=fraza
 Sprawy, dokumenty spraw i baza wiedzy: `[{ sprawa_id, znak, dokument_id, nazwa_pliku, rodzaj, data, fragment }]`
@@ -180,7 +251,8 @@ Sprawy, dokumenty spraw i baza wiedzy: `[{ sprawa_id, znak, dokument_id, nazwa_p
 
 ## Baza wiedzy
 - `GET /wiedza` → `[{ id, rodzaj, nazwa_pliku, znaki, utworzono }]`
-- `POST /wiedza` multipart `plik`, `rodzaj` (USTAWA | ZARZADZENIE | WZOR | ARCHIWUM) → 201 + Dokument (`sprawa_id = null`); blokada PESEL / dowodu
+- `POST /wiedza` multipart `plik`, `rodzaj` (USTAWA | ZARZADZENIE | WZOR | ARCHIWUM) → 201 + Dokument (`sprawa_id = null`); bez anonimizacji (materiały źródłowe zapisywane w całości)
+- `GET /wiedza/{id}` → Dokument (pełny tekst; 404 gdy to nie dokument bazy wiedzy)
 - `DELETE /wiedza/{id}` → 204 (np. stara wersja ustawy)
 
 ---

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.routers import sprawy as sprawy_router
 from app.seed import DOMYSLNY_XLSX, PISMA, PODSTAWY
 from app.sprawy import ekstrakcja, import_archiwum, importer
+from app.sprawy.model import Metoda
 from main import app
 
 DZIS = date(2026, 11, 21)
@@ -69,10 +70,84 @@ def test_wyszukiwarka_i_baza_wiedzy():
     assert client.get("/archiwum/szukaj", params={"q": "terminie zwłoki"}).json()[0]["dokument_id"] == wid
 
     assert [w["nazwa_pliku"] for w in client.get("/wiedza").json()] == ["udip.txt"]
+    doc = client.get(f"/wiedza/{wid}").json()
+    assert doc["tekst"].startswith("Art. 13.") and doc["rodzaj"] == "USTAWA"
+    odp = client.get(f"/sprawy/{sid}").json()["dokumenty"][0]["id"]
+    assert client.get(f"/wiedza/{odp}").status_code == 404  # dokument sprawy to nie baza wiedzy
     assert client.delete(f"/wiedza/{wid}").status_code == 204
     assert client.get("/wiedza").json() == []
+    assert client.get(f"/wiedza/{wid}").status_code == 404
     assert client.delete(f"/wiedza/{wid}").status_code == 404
     assert client.get("/archiwum/szukaj", params={"q": "terminie zwłoki"}).json() == []
+
+
+def test_drafty_pism_z_szablonu():
+    sid = sprawa(11, "Wykaz dotacji dla fundacji")
+    dokument(sid, "Wnoszę o wykaz dotacji udzielonych fundacjom w 2025 r.")
+    draft = lambda **b: client.post(f"/sprawy/{sid}/draft", json=b)  # noqa: E731
+
+    w = draft(rodzaj="WEZWANIE").json()
+    assert w["tekst"].startswith("PROJEKT – wymaga weryfikacji urzędnika") and "Jan Testowy" in w["tekst"]
+    assert "doprecyzowanie" in w["tekst"] and "7 dni" in w["tekst"] and w["llm_uzyty"] is False
+    assert any("Wniosek" in z for z in w["zrodla"])
+
+    p = draft(rodzaj="PRZEKAZANIE", wydzialy=["wgk"]).json()["tekst"]
+    assert "Do:" in p and "Jan Testowy" not in p  # pismo wewnętrzne – bez danych wnioskodawcy
+    assert "termin ustawowy" in p
+    assert any("Nie wskazano wydziałów" in u for u in draft(rodzaj="PRZEKAZANIE").json()["uwagi"])
+
+    k = draft(rodzaj="PRZEDLUZENIE", nowy_termin="2027-01-09").json()["tekst"]
+    assert "art. 13 ust. 2" in k and "09.01.2027" in k
+
+    assert "brak wgranych odpowiedzi" in draft(rodzaj="ODPOWIEDZ").json()["tekst"]
+    assert draft(rodzaj="NIEZNANY").status_code == 422
+    assert client.get(f"/sprawy/{sid}").json()["status"] == "NOWY"  # draft niczego nie zapisuje
+
+
+def test_anulowanie_draftu_przerywa_generacje():
+    import asyncio
+
+    from app.routers.archiwum import do_rozlaczenia
+    from fastapi import HTTPException
+
+    class Rozlaczony:
+        async def is_disconnected(self):
+            return True
+
+    przerwana = []
+
+    async def dlugo():
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            przerwana.append(True)
+            raise
+
+    async def test():
+        try:
+            await do_rozlaczenia(Rozlaczony(), dlugo(), co=0.01)
+        except HTTPException as exc:
+            return exc.status_code
+
+    assert asyncio.run(test()) == 499 and przerwana == [True]
+
+
+def test_baza_wiedzy_bez_anonimizacji():
+    tekst = "Archiwalne pismo do Jana Kowalskiego, PESEL 44051401359."
+    r = client.post("/wiedza", data={"rodzaj": "ARCHIWUM"}, files={"plik": ("pismo.txt", tekst.encode())})
+    assert r.status_code == 201 and client.get(f"/wiedza/{r.json()['id']}").json()["tekst"] == tekst
+    # dokumenty spraw nadal tylko po anonimizacji
+    sid = sprawa(9, "Test")
+    assert client.post(f"/sprawy/{sid}/dokumenty", data={"rodzaj": "WNIOSEK"},
+                       files={"plik": ("d.txt", tekst.encode())}).status_code == 422
+
+
+def test_seed_bazy_wiedzy_bez_anonimizacji(tmp_path):
+    from app.sprawy import import_archiwum
+    tekst = "Zarządzenie nr 535/2024 Prezydenta Miasta Bydgoszczy – Jan Kowalski, tel. 501 234 567."
+    (tmp_path / "Zarządzenie test.txt").write_text(tekst)
+    assert import_archiwum.importuj_wiedze(tmp_path) == (1, 0)
+    assert client.get(f"/wiedza/{client.get('/wiedza').json()[0]['id']}").json()["tekst"] == tekst
 
 
 def test_projekt_odpowiedzi_z_szablonu_i_docx():
@@ -80,7 +155,7 @@ def test_projekt_odpowiedzi_z_szablonu_i_docx():
     client.post(f"/sprawy/{sid}/zdarzenia", json={"typ": "PRZEKAZANIE", "data": "2026-11-11",
                                                   "payload": {"wydzialy": ["BKB"]}})
     dokument(sid, "Koszt organizacji wyniósł 1 200 000 zł brutto.", "ODP_WYDZIALU", "BKB")
-    p = client.post(f"/sprawy/{sid}/projekt").json()
+    p = client.post(f"/sprawy/{sid}/draft", json={"rodzaj": "ODPOWIEDZ"}).json()
     assert p["llm_uzyty"] is False  # testy: tryb echo – szablon
     t = p["tekst"]
     assert t.startswith("PROJEKT – wymaga weryfikacji urzędnika")
@@ -95,7 +170,17 @@ def test_projekt_odpowiedzi_z_szablonu_i_docx():
     assert "attachment" in r.headers["content-disposition"]
 
     bez = sprawa(8, "Coś")
-    assert "brak wgranych odpowiedzi" in client.post(f"/sprawy/{bez}/projekt").json()["tekst"]
+    assert "brak wgranych odpowiedzi" in client.post(f"/sprawy/{bez}/draft", json={"rodzaj": "ODPOWIEDZ"}).json()["tekst"]
+
+
+def test_seed_nie_zapisuje_nieudanego_ocr(monkeypatch, tmp_path):
+    """OCR nic nie odczytał (np. brak tesseract) -> pismo pominięte i ponowione w kolejnym seedzie."""
+    (tmp_path / "Wniosek - skan.pdf").write_bytes(b"%PDF")
+    wyniki = iter([ekstrakcja.Odczyt("", Metoda.OCR, 0.0),
+                   ekstrakcja.Odczyt("Odczytany wniosek", Metoda.OCR, None)])
+    monkeypatch.setattr(ekstrakcja, "odczytaj", lambda *_: next(wyniki))
+    assert import_archiwum.importuj_pisma(tmp_path) == (0, 1)
+    assert import_archiwum.importuj_pisma(tmp_path) == (1, 0)
 
 
 @pytest.mark.skipif(not (DOMYSLNY_XLSX.exists() and PISMA.is_dir()), reason="brak paczki UMB")

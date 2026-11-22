@@ -54,6 +54,25 @@ def utworz_sprawe(
     return sid
 
 
+def edytuj_sprawe(sid: int, pola: dict) -> None:
+    """pola ⊆ {znak, data_wplywu, wnioskodawca, przedmiot, inicjaly}. Zmiana znaku przelicza nr/rok,
+    zmiana daty wpływu – datę zdarzenia REJESTRACJA (od niej liczy się termin)."""
+    kolumny = {k: v for k, v in pola.items() if k in ("znak", "data_wplywu", "wnioskodawca", "przedmiot", "inicjaly")}
+    if "znak" in kolumny:
+        m = ZNAK_RE.match(kolumny["znak"])
+        kolumny |= {"nr": int(m.group(1)), "rok": int(m.group(2))}
+    if "data_wplywu" in kolumny:
+        kolumny["data_wplywu"] = kolumny["data_wplywu"].isoformat()
+    if not kolumny:
+        return
+    with store.lock, store.conn:
+        store.conn.execute(f"UPDATE sprawy SET {', '.join(f'{k} = ?' for k in kolumny)} WHERE id = ?",
+                           (*kolumny.values(), sid))
+        if "data_wplywu" in kolumny:
+            store.conn.execute("UPDATE zdarzenia SET data = ? WHERE sprawa_id = ? AND typ = 'REJESTRACJA'",
+                               (kolumny["data_wplywu"], sid))
+
+
 def _wiersz(sid: int):
     return store.conn.execute("SELECT * FROM sprawy WHERE id = ?", (sid,)).fetchone()
 
@@ -185,6 +204,22 @@ def dokumenty_sprawy(sid: int) -> list[Dokument]:
     return [_dokument(r) for r in rows]
 
 
-def popraw_tekst(did: int, tekst: str) -> None:
+def edytuj_dokument(did: int, pola: dict) -> None:
+    """pola ⊆ {tekst, rodzaj, nazwa_pliku, wydzial}; nazwy kolumn z białej listy."""
+    pola = {k: v for k, v in pola.items() if k in ("tekst", "rodzaj", "nazwa_pliku", "wydzial")}
+    if not pola:
+        return
     with store.lock, store.conn:
-        store.conn.execute("UPDATE dokumenty SET tekst = ? WHERE id = ?", (tekst, did))
+        store.conn.execute(f"UPDATE dokumenty SET {', '.join(f'{k} = ?' for k in pola)} WHERE id = ?",
+                           (*pola.values(), did))
+
+
+def usun_dokument(did: int) -> bool:
+    r = store.conn.execute("SELECT sciezka FROM dokumenty WHERE id = ?", (did,)).fetchone()
+    if r is None:
+        return False
+    with store.lock, store.conn:
+        store.conn.execute("DELETE FROM dokumenty WHERE id = ?", (did,))
+    if r["sciezka"]:
+        Path(r["sciezka"]).unlink(missing_ok=True)
+    return True

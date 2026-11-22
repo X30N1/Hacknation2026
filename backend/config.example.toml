@@ -4,8 +4,8 @@
 [llm]
 # DeepSeek (API zgodne z OpenAI) lub lokalny serwer, np. Ollama: "http://localhost:11434/v1"
 base_url = "https://api.deepseek.com"
-api_key = ""
-model = "deepseek-chat"
+api_key = "sk-eed97e382d084eabbe0498dfa6f9624b"
+model = "deepseek-flash"
 # limit czasu zapytania do LLM w sekundach
 timeout = 120
 
@@ -38,25 +38,11 @@ katalog = "data/pliki"
 max_mb = 20
 
 [ocr]
-# Skany PDF rozpoznaje GLM-OCR (https://huggingface.co/zai-org/GLM-OCR).
-# api = "ollama" – Ollama (`ollama pull glm-ocr`), natywne /api/generate; base_url bez /v1.
-# api = "openai" – vLLM / SGLang (--served-model-name glm-ocr); base_url z /v1, np. http://gpu:8080/v1.
-# W Dockerze adres nadpisuje APP_OCR_BASE_URL z docker-compose.yml (http://ollama:11434).
-# Bez serwera OCR skany wracają z pustym tekstem do wpisania ręcznie.
-api = "ollama"
-base_url = "http://localhost:11434"
-api_key = ""
-model = "glm-ocr"
-prompt = "Text Recognition:"
-timeout = 600          # sekundy na jedną stronę (na CPU kilka minut)
-max_tokens = 4096      # limit tekstu z jednej strony
-num_ctx = 16384        # kontekst modelu (Ollama): obraz strony ~4000 tokenów + odpowiedź
-# Skany to oryginały z niezamazanymi danymi osobowymi – serwer spoza sieci lokalnej jest
-# blokowany, chyba że ustawisz true.
-zezwol_zewnetrzny = false
-dpi = 150
-max_bok_px = 1600      # dłuższy bok obrazu strony – większe skany są zmniejszane (szybszy OCR)
-# num_thread = 8       # wątki CPU dla Ollamy; domyślnie wybiera Ollama (zwykle rdzenie wydajne)
+# Skany PDF rozpoznaje Tesseract z językiem polskim (Arch: tesseract-data-pol,
+# Debian/Ubuntu: tesseract-ocr-pol; w obrazie Dockera jest). Bez niego skany wracają z pustym
+# tekstem do wpisania ręcznie.
+jezyk = "pol"
+dpi = 300
 max_stron = 20
 # PDF z mniejszą liczbą znaków w warstwie tekstowej jest traktowany jak skan
 min_znakow_warstwy = 50
@@ -66,3 +52,18 @@ min_znakow_warstwy = 50
 # także model z [llm] (imiona i nazwiska, dane wrażliwe). Tekst dokumentu trafia do modelu –
 # na produkcji tylko model lokalny.
 llm = true
+
+[auth]
+# Przy pierwszym uruchomieniu powstaje konto admin / admin – hasło trzeba zmienić przy pierwszym logowaniu.
+# Wymóg drugiego składnika (TOTP / klucz FIDO2) i minimalną długość hasła ustawia administrator
+# w aplikacji (Użytkownicy → Ustawienia bezpieczeństwa). Domyślnie oba wyłączone.
+sesja_godziny = 10            # sesja po pełnym zalogowaniu
+sesja_wstepna_minuty = 15     # czas na zmianę hasła / drugi składnik po podaniu hasła
+max_prob = 5                  # nieudane próby (hasło lub kod) przed blokadą konta
+blokada_minut = 15
+# true za reverse proxy z HTTPS (ciasteczko sesji tylko przez TLS)
+cookie_secure = false
+# Klucze sprzętowe: rp_id = domena, pod którą otwierana jest aplikacja (bez portu), origins = pełne
+# adresy. Przeglądarki pozwalają na klucze tylko przez HTTPS albo na localhost.
+rp_id = "localhost"
+origins = ["http://localhost:8000", "http://localhost:5173"]

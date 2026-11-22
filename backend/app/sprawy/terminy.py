@@ -10,7 +10,7 @@ from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from app.sprawy.model import Flaga, Pilnosc, Status, TypZdarzenia, Zdarzenie, Zrodlo
+from app.sprawy.model import ZAMKNIETE, Flaga, Pilnosc, Status, TypZdarzenia, Zdarzenie, Zrodlo
 
 TERMIN_DNI = 14
 DOPRECYZOWANIE_DNI = 7
@@ -63,6 +63,7 @@ def przelicz(
     przedluzenie = None
     odp = None
     wezwanie = None
+    przed_zamknieciem = None  # status do przywrócenia przy wznowieniu
 
     for e in sorted(zdarzenia, key=lambda e: (e.data, e.id)):
         match e.typ:
@@ -93,8 +94,14 @@ def przelicz(
             case TypZdarzenia.BEZ_ROZPOZNANIA:
                 status = Status.BEZ_ROZPOZNANIA
                 odp = e.data
+            case TypZdarzenia.ZAMKNIECIE:
+                przed_zamknieciem = status
+                status = Status.ZAMKNIETA
+            case TypZdarzenia.WZNOWIENIE:
+                if status == Status.ZAMKNIETA and przed_zamknieciem:
+                    status = przed_zamknieciem
 
-    zamknieta = status in (Status.WYSLANA, Status.BEZ_ROZPOZNANIA)
+    zamknieta = status in ZAMKNIETE
     pilnosc = Pilnosc.ZAMKNIETA
     pozostalo = None
     if not zamknieta and wstrzymany:
@@ -150,4 +157,11 @@ DOZWOLONE: dict[TypZdarzenia, set[Status]] = {
     TypZdarzenia.WYSLANO: {Status.PROJEKT_GOTOWY},
     TypZdarzenia.BEZ_ROZPOZNANIA: {Status.DOPRECYZOWANIE},
     TypZdarzenia.REJESTRACJA: set(),  # tylko przy tworzeniu sprawy
+    # tylko administrator (app/routers/sprawy.py)
+    TypZdarzenia.ZAMKNIECIE: set(Status) - ZAMKNIETE,
+    TypZdarzenia.WZNOWIENIE: {Status.ZAMKNIETA},
 }
+TYLKO_ADMIN = {TypZdarzenia.ZAMKNIECIE, TypZdarzenia.WZNOWIENIE}
+# wpisy audytowe – tworzone tylko przez serwer przy edycji / usuwaniu (POST /zdarzenia ich nie przyjmuje)
+AUDYT = {TypZdarzenia.DOKUMENT_DODANIE, TypZdarzenia.DOKUMENT_ZMIANA, TypZdarzenia.DOKUMENT_USUNIECIE, TypZdarzenia.SPRAWA_ZMIANA}
+DOZWOLONE |= {t: set() for t in AUDYT}

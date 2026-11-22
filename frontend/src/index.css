@@ -150,7 +150,7 @@ table.cal { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 .status-DOPRECYZOWANIE { background: var(--violet-bg); border-color: #d3c1ec; color: var(--violet); }
 .status-PRZEDLUZONA { background: var(--orange-bg); border-color: #f0c999; color: var(--orange); }
 .status-PROJEKT_GOTOWY { background: var(--ok-bg); border-color: #a9d8b8; color: var(--ok); }
-.status-WYSLANA, .status-BEZ_ROZPOZNANIA { color: var(--closed); }
+.status-WYSLANA, .status-BEZ_ROZPOZNANIA, .status-ZAMKNIETA { color: var(--closed); }
 
 .flag-count { color: var(--orange); font-weight: 700; white-space: nowrap; cursor: help; }
 .flag-list { padding-left: 0; list-style: none; margin: 0; }
@@ -243,3 +243,63 @@ mark { background: var(--yellow-bg); color: var(--text); padding: 0 1px; border-
   .month-day { min-height: 64px; }
   .month-chip { font-size: 0.65rem; }
 }
+
+/* ---------- logowanie i konta ---------- */
+.auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
+.auth-card { width: 100%; max-width: 440px; padding: 24px; }
+.auth-card h1 { font-size: 1.3rem; margin: 16px 0 8px; }
+.auth-brand { margin-bottom: 4px; }
+.auth-stopka { margin: 16px 0 0; font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; }
+.btn-pelny { width: 100%; justify-content: center; margin-top: 4px; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: var(--danger-bg); }
+.link { background: none; border: none; padding: 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; }
+.lub { text-align: center; color: var(--muted); margin: 10px 0; }
+.przelacznik { display: flex; gap: 8px; margin: 8px 0 12px; flex-wrap: wrap; }
+.kroki { padding-left: 20px; margin: 4px 0 8px; }
+.qr { display: flex; justify-content: center; background: #fff; padding: 8px; border-radius: 8px; margin: 8px 0; }
+.qr svg { width: 210px; height: 210px; }
+.sekret { display: block; margin-top: 6px; font-size: 0.95rem; letter-spacing: 0.05em; word-break: break-all; user-select: all; }
+.user-menu { display: flex; align-items: center; gap: 8px; }
+.user-link { font-weight: 600; color: var(--text); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
+.user-link:hover, .user-link.active { background: var(--info-bg); color: var(--primary); }
+.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
+.lista-kluczy { list-style: none; padding: 0; margin: 4px 0 10px; }
+.lista-kluczy li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.lista-kluczy li .btn { margin-left: auto; }
+
+/* czytnik dokumentów bazy wiedzy */
+.czytnik { border-left: 4px solid var(--primary); }
+.czytnik h2 { margin: 0; }
+.czytnik .search { align-items: center; margin-bottom: 8px; }
+pre.doc-text.readonly.czytnik-tekst { max-height: 70vh; }
+.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--primary); cursor: pointer; text-align: left; text-decoration: underline; }
+.btn-link:hover { color: var(--primary-hover); }
+tr.wiersz-aktywny td { background: var(--info-bg); }
+
+/* okno wyboru akcji: A. plik / B. draft AI / tylko historia */
+dialog.okno {
+  border: 0; border-radius: 12px; padding: 0; width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+dialog.okno::backdrop { background: rgba(20, 28, 40, 0.45); }
+.okno-tresc { padding: 20px; display: grid; gap: 10px; }
+.okno-tresc h2 { margin: 0 0 4px; }
+.okno-pytanie { margin: 8px 0 0; font-weight: 600; }
+.warianty { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.wariant {
+  display: grid; gap: 4px; align-content: start; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+}
+.wariant:hover:not(:disabled), .wariant:focus-visible { border-color: var(--primary); background: var(--info-bg); }
+.wariant:disabled { opacity: 0.55; cursor: not-allowed; }
+.wariant-litera {
+  width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center;
+  background: var(--primary); color: #fff; font-weight: 700;
+}
+/* oczekiwanie na draft AI (jak przy odczycie wniosku) */
+.czekanie { border: 2px dashed var(--border); border-radius: 12px; padding: 32px 24px; text-align: center; }
+.czekanie p { margin: 0 0 8px; }
+.admin-akcje { margin-top: 12px; align-items: center; }
+.timeline li.audyt { color: var(--muted); }

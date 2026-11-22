@@ -1,98 +1,62 @@
-"""OCR skanów przez GLM-OCR – serwer udawany przez httpx.MockTransport (bez sieci)."""
-import base64
-import json
+"""OCR skanów – Tesseract z językiem polskim (testy pomijane, gdy nie jest zainstalowany)."""
+import io
+import pathlib
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image, ImageDraw, ImageFont
 
-from app.config import OCRSettings, load_settings, settings
+from app.config import load_settings, settings
 from app.sprawy import ekstrakcja
 from main import app
-from tests.test_sprawy import pdf_z_tekstem
 
 client = TestClient(app)
-SKAN = pdf_z_tekstem("")  # PDF bez warstwy tekstowej -> OCR
+# czcionka z polskimi znakami (domyślna czcionka PIL nie ma np. „ę”)
+CZCIONKI = ["/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            r"C:\Windows\Fonts\arial.ttf"]
+CZCIONKA = next((c for c in CZCIONKI if pathlib.Path(c).is_file()), None)
 
 
-def serwer(monkeypatch, odpowiedz, modele=("glm-ocr:latest",)):
-    """Udawany serwer OCR; zwraca listę zapytań (ścieżka, body)."""
-    zapytania = []
-
-    def handler(req: httpx.Request) -> httpx.Response:
-        body = json.loads(req.content) if req.content else None
-        zapytania.append((req.url.path, body))
-        if req.url.path == "/api/tags":
-            return httpx.Response(200, json={"models": [{"name": m} for m in modele]})
-        if req.url.path == "/v1/models":
-            return httpx.Response(200, json={"data": [{"id": m} for m in modele]})
-        if isinstance(odpowiedz, Exception):
-            raise odpowiedz
-        if req.url.path == "/api/generate":
-            return httpx.Response(200, json={"response": odpowiedz})
-        return httpx.Response(200, json={"choices": [{"message": {"content": odpowiedz}}]})
-
-    def klient(timeout=None):
-        return httpx.Client(base_url=settings.ocr.base_url, transport=httpx.MockTransport(handler))
-
-    monkeypatch.setattr(ekstrakcja, "_klient", klient)
-    return zapytania
+def skan(tekst: str) -> bytes:
+    """PDF z samym obrazem strony (bez warstwy tekstowej) – jak ze skanera."""
+    obraz = Image.new("L", (1240, 400), 255)
+    ImageDraw.Draw(obraz).text((60, 150), tekst, fill=0, font=ImageFont.truetype(CZCIONKA, 56) if CZCIONKA else ImageFont.load_default(size=56))
+    buf = io.BytesIO()
+    obraz.save(buf, format="PDF", resolution=150)
+    return buf.getvalue()
 
 
-def odczyt():
-    return client.post("/dokumenty/odczyt", files={"plik": ("skan.pdf", SKAN)}).json()
+def odczyt(dane: bytes):
+    return client.post("/dokumenty/odczyt", files={"plik": ("skan.pdf", dane)}).json()
 
 
-def test_ollama_generate(monkeypatch):
-    monkeypatch.setattr(settings, "ocr", OCRSettings())
-    zapytania = serwer(monkeypatch, "```markdown\nWniosek o udostępnienie informacji\n```")
-    r = odczyt()
-    assert r["metoda"] == "OCR" and r["tekst"] == "Wniosek o udostępnienie informacji"
-    assert r["ocr_pewnosc"] is None  # wszystkie strony odczytane, model nie podaje pewności
-    sciezka, body = zapytania[-1]
-    assert sciezka == "/api/generate" and body["model"] == "glm-ocr"
-    assert body["prompt"] == "Text Recognition:" and body["stream"] is False
-    assert base64.b64decode(body["images"][0]).startswith(b"\x89PNG")
+@pytest.fixture(autouse=True)
+def bez_pamieci():
+    ekstrakcja.ocr_dostepny.cache_clear()
+    yield
+    ekstrakcja.ocr_dostepny.cache_clear()
 
 
-def test_openai_vllm(monkeypatch):
-    monkeypatch.setattr(settings, "ocr", OCRSettings(api="openai", base_url="http://localhost:8080/v1"))
-    zapytania = serwer(monkeypatch, "Treść skanu", modele=("glm-ocr",))
-    assert odczyt()["tekst"] == "Treść skanu"
-    sciezka, body = zapytania[-1]
-    assert sciezka == "/v1/chat/completions"
-    obraz, tekst = body["messages"][0]["content"]
-    assert obraz["image_url"]["url"].startswith("data:image/png;base64,")
-    assert tekst == {"type": "text", "text": "Text Recognition:"}
+@pytest.mark.skipif(not ekstrakcja.ocr_dostepny(), reason="brak tesseract z językiem polskim")
+def test_tesseract_polski():
+    r = odczyt(skan("Wniosek o udostępnienie informacji"))
+    assert r["metoda"] == "OCR" and "Wniosek" in r["tekst"] and "informacji" in r["tekst"]
+    if CZCIONKA:
+        assert "udostępnienie" in r["tekst"]  # polskie znaki – język pol
+    assert 0.6 <= r["ocr_pewnosc"] <= 1
 
 
-def test_brak_modelu_i_blad_strony(monkeypatch):
-    monkeypatch.setattr(settings, "ocr", OCRSettings())
-    serwer(monkeypatch, "x", modele=("qwen2.5:7b",))  # glm-ocr niepobrany
-    r = odczyt()
-    assert (r["tekst"], r["ocr_pewnosc"]) == ("", 0.0)
-
-    serwer(monkeypatch, httpx.ReadTimeout("za długo"))
-    r = odczyt()
-    assert r["ocr_pewnosc"] == 0.0 and "nie odczytano" in r["tekst"]
+def test_brak_jezyka(monkeypatch):
+    monkeypatch.setattr(settings.ocr, "jezyk", "xyz")  # pakiet językowy niezainstalowany
+    r = odczyt(skan("Wniosek"))
+    assert (r["metoda"], r["tekst"], r["ocr_pewnosc"]) == ("OCR", "", 0.0)  # do wpisania ręcznie
 
 
-def test_serwer_zewnetrzny_zablokowany(monkeypatch):
-    """Skany to oryginały z danymi osobowymi – bez zgody nie wysyłamy ich poza sieć lokalną."""
-    monkeypatch.setattr(settings, "ocr", OCRSettings(api="openai", base_url="https://ocr.example.com/v1"))
-    zapytania = serwer(monkeypatch, "x")
-    assert ekstrakcja.ocr_dostepny() is False and zapytania == []
-
-    monkeypatch.setattr(settings.ocr, "zezwol_zewnetrzny", True)
-    assert ekstrakcja.ocr_dostepny() is True
-
-
-@pytest.mark.parametrize("env, oczekiwany", [
-    ({}, "http://localhost:11434"),
-    ({"APP_OCR_BASE_URL": "http://ollama:11434"}, "http://ollama:11434"),
-])
-def test_adres_z_env(tmp_path, env, oczekiwany):
+def test_jezyk_z_env(tmp_path):
     p = tmp_path / "config.toml"
-    p.write_text('[ocr]\nmodel = "glm-ocr:q8_0"\n')
-    s = load_settings(p, env=env)
-    assert (s.ocr.base_url, s.ocr.model) == (oczekiwany, "glm-ocr:q8_0")
+    p.write_text('[ocr]\njezyk = "pol"\ndpi = 200\n')
+    s = load_settings(p, env={"APP_OCR_JEZYK": "pol+eng"})
+    assert (s.ocr.jezyk, s.ocr.dpi) == ("pol+eng", 200)

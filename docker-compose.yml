@@ -1,13 +1,12 @@
 # Uruchomienie w urzędzie:  docker compose up --build   ->  http://localhost:8000
 #
-# OCR skanów: GLM-OCR w lokalnej Ollamie. Jednorazowo pobierz model (jedyny krok z internetem):
-#   docker compose run --rm ollama-pobierz                         # domyślnie: glm-ocr
+# OCR skanów: Tesseract z językiem polskim w obrazie aplikacji (bez modelu, bez internetu).
 #
-# Bez modelu językowego aplikacja działa lokalnie: kalendarz, archiwum (wyszukiwanie pełnotekstowe),
+# Bez modelu językowego aplikacja działa lokalnie: OCR, kalendarz, archiwum (wyszukiwanie pełnotekstowe),
 # wydziały ze słów kluczowych i archiwum, projekt pisma z szablonu, anonimizacja wzorcami.
 #
-# Z lokalnym modelem językowym (dane nie opuszczają serwera):
-#   1. MODEL="glm-ocr qwen2.5:7b" docker compose run --rm ollama-pobierz
+# Ollama służy wyłącznie modelowi językowemu (dane nie opuszczają serwera):
+#   1. MODEL=qwen2.5:7b docker compose run --rm ollama-pobierz     # jednorazowo, jedyny krok z internetem
 #   2. w backend/config.toml:   [llm] base_url = "http://ollama:11434/v1"  api_key = ""  model = "qwen2.5:7b"
 #
 # Sieci:
@@ -22,8 +21,6 @@ services:
     volumes:
       - dane:/app/backend/data
       - ./backend/config.toml:/app/backend/config.toml:ro
-    environment:
-      APP_OCR_BASE_URL: http://ollama:11434
     depends_on:
       - ollama
     networks:
@@ -49,7 +46,7 @@ services:
     networks:
       - default
     environment:
-      MODEL: ${MODEL:-glm-ocr}           # kilka modeli: MODEL="SpeakLeash/bielik-1.5b-v3.0-instruct:Q8_0"
+      MODEL: ${MODEL:-qwen2.5:7b}        # inny / kilka modeli: MODEL="SpeakLeash/bielik-1.5b-v3.0-instruct:Q8_0"
     entrypoint: ["/bin/sh", "-c"]
     command: ['ollama serve & until ollama list >/dev/null 2>&1; do sleep 1; done; for m in $$MODEL; do ollama pull "$$m" || exit 1; done']
 

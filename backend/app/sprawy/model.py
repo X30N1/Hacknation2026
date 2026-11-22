@@ -24,6 +24,10 @@ class Status(StrEnum):
     PROJEKT_GOTOWY = "PROJEKT_GOTOWY"  # d) odpowiedź przygotowana
     WYSLANA = "WYSLANA"                # e) odpowiedź wysłana
     BEZ_ROZPOZNANIA = "BEZ_ROZPOZNANIA"
+    ZAMKNIETA = "ZAMKNIETA"            # zamknięta przez administratora (np. wycofany / zdublowany wniosek)
+
+
+ZAMKNIETE = {Status.WYSLANA, Status.BEZ_ROZPOZNANIA, Status.ZAMKNIETA}
 
 
 class Pilnosc(StrEnum):
@@ -45,6 +49,13 @@ class TypZdarzenia(StrEnum):
     PROJEKT = "PROJEKT"
     WYSLANO = "WYSLANO"
     BEZ_ROZPOZNANIA = "BEZ_ROZPOZNANIA"
+    ZAMKNIECIE = "ZAMKNIECIE"          # tylko administrator; payload: { powod }
+    WZNOWIENIE = "WZNOWIENIE"          # tylko administrator – cofa zamknięcie
+    # wpisy audytowe (tworzy je serwer, nie zmieniają statusu); inicjaly = login użytkownika
+    DOKUMENT_DODANIE = "DOKUMENT_DODANIE"    # payload: { dokument, rodzaj } – każdy użytkownik
+    DOKUMENT_ZMIANA = "DOKUMENT_ZMIANA"      # payload: { dokument, zmiany: {pole: [stare, nowe]} }
+    DOKUMENT_USUNIECIE = "DOKUMENT_USUNIECIE"  # payload: { dokument, rodzaj }
+    SPRAWA_ZMIANA = "SPRAWA_ZMIANA"          # payload: { zmiany: {pole: [stare, nowe]} }
 
 
 class Metoda(StrEnum):
@@ -144,7 +155,27 @@ class ZdarzenieDodaj(_Wejscie):
 
 
 class DokumentPopraw(_Wejscie):
-    tekst: str = Field(..., max_length=TEKST_MAX)
+    """Edycja dokumentu (administrator). Pominięte pola bez zmian."""
+    tekst: str | None = Field(None, max_length=TEKST_MAX)
+    rodzaj: str | None = Field(None, min_length=1, max_length=40)
+    nazwa_pliku: str | None = Field(None, min_length=1, max_length=200)
+    wydzial: str | None = Field(None, max_length=20)   # "" = bez wydziału
+
+
+class SprawaEdytuj(_Wejscie):
+    """Edycja danych wniosku (administrator). Pominięte pola bez zmian."""
+    znak: str | None = None
+    data_wplywu: date | None = None
+    wnioskodawca: str | None = Field(None, max_length=WNIOSKODAWCA_MAX)
+    przedmiot: str | None = Field(None, max_length=PRZEDMIOT_MAX)
+    inicjaly: str | None = Field(None, max_length=INICJALY_MAX)
+
+    @field_validator("znak")
+    @classmethod
+    def _znak(cls, v: str | None) -> str | None:
+        if v is not None and not ZNAK_RE.match(v):
+            raise ValueError("Numer sprawy musi mieć format BKS.IV.1431.<nr>.<rok>.")
+        return v
 
 
 class Propozycja(BaseModel):
@@ -218,7 +249,22 @@ class SugestieWydzialow(BaseModel):
     wszystkie: list[dict[str, str]]  # pełna lista wydziałów i biur UMB (skrot, nazwa)
 
 
-class ProjektOdpowiedzi(BaseModel):
+class RodzajPisma(StrEnum):
+    """Projekty pism przygotowywane przez system (POST /sprawy/{id}/draft)."""
+    ODPOWIEDZ = "ODPOWIEDZ"          # odpowiedź na wniosek
+    WEZWANIE = "WEZWANIE"            # wezwanie do doprecyzowania
+    PRZEKAZANIE = "PRZEKAZANIE"      # zapytanie do wydziałów
+    PRZEDLUZENIE = "PRZEDLUZENIE"    # zawiadomienie o przedłużeniu terminu
+
+
+class DraftPisma(_Wejscie):
+    rodzaj: RodzajPisma
+    wydzialy: list[str] = Field([], max_length=20)
+    nowy_termin: date | None = None
+
+
+class ProjektPisma(BaseModel):
+    """Projekt pisma (POST /sprawy/{id}/draft) – do sprawdzenia przez urzędnika."""
     tekst: str
     llm_uzyty: bool
     zrodla: list[str]          # z czego powstał projekt – do weryfikacji przez urzędnika

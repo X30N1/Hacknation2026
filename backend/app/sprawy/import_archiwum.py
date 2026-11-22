@@ -1,10 +1,11 @@
 """Import archiwalnych pism i podstaw prawnych z paczki UMB (python -m app.seed --archiwum).
 
 Pisma („Wniosek - BKS.IV.1431.15.2026.docx”, „Odpowiedź - …pdf”) trafiają do spraw z kalendarium
-o tym samym numerze; bez pasującej sprawy – do bazy wiedzy jako ARCHIWUM. Przed zapisem tekst jest
-automatycznie anonimizowany wzorcami i danymi wnioskodawcy (materiały testowe, bez udziału
+o tym samym numerze; bez pasującej sprawy – do bazy wiedzy jako ARCHIWUM. Przed zapisem tekst pism
+jest automatycznie anonimizowany wzorcami i danymi wnioskodawcy (materiały testowe, bez udziału
 urzędnika). Zapisywany jest wyłącznie tekst po anonimizacji (.txt) – oryginały nie trafiają do bazy.
-Import jest idempotentny.
+Podstawy prawne (ustawy, zarządzenia) trafiają do bazy wiedzy w całości, bez anonimizacji – tak jak
+pliki dodawane do bazy wiedzy w aplikacji. Import jest idempotentny.
 """
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def _istnieje(nazwa: str, sid: int | None) -> bool:
     ).fetchone() is not None
 
 
-def _zapisz(plik: Path, rodzaj: str, sid: int | None) -> bool:
+def _zapisz(plik: Path, rodzaj: str, sid: int | None, anonimizuj: bool = True) -> bool:
     nazwa = plik.stem + ".txt"
     if _istnieje(nazwa, sid):
         return False
@@ -48,9 +49,13 @@ def _zapisz(plik: Path, rodzaj: str, sid: int | None) -> bool:
         odczyt = ekstrakcja.odczytaj(plik.name, plik.read_bytes())
     except ekstrakcja.NieobslugiwanyFormat:
         return False
-    if not odczyt.tekst.strip():  # np. pismo odręczne – OCR nic nie odczytał
+    # pusty tekst (np. pismo odręczne) albo OCR niedostępny (brak tesseract / języka): nie zapisujemy –
+    # następny seed spróbuje ponownie (zapisany dokument blokowałby powtórkę)
+    if not odczyt.tekst.strip() or odczyt.ocr_pewnosc == 0:
         return False
-    tekst = anonimizacja.zamaz_automatycznie(odczyt.tekst, repo.wnioskodawca(sid) if sid else None)
+    tekst = odczyt.tekst
+    if anonimizuj:
+        tekst = anonimizacja.zamaz_automatycznie(tekst, repo.wnioskodawca(sid) if sid else None)
     repo.zapisz_dokument(nazwa, tekst.encode("utf-8"), rodzaj, odczyt.metoda, tekst,
                          odczyt.ocr_pewnosc, sprawa_id=sid)
     return True
@@ -78,7 +83,7 @@ def importuj_wiedze(katalog: Path) -> tuple[int, int]:
         rodzaj = next((r for k, r in RODZAJ_WIEDZY.items() if k in plik.name.lower()), None)
         if rodzaj is None or ekstrakcja.rozszerzenie(plik.name) not in ekstrakcja.ROZSZERZENIA:
             continue
-        if _zapisz(plik, rodzaj, None):
+        if _zapisz(plik, rodzaj, None, anonimizuj=False):
             nowe += 1
         else:
             pominiete += 1
