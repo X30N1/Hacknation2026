@@ -4,7 +4,7 @@
 [llm]
 # DeepSeek (API zgodne z OpenAI) lub lokalny serwer, np. Ollama: "http://localhost:11434/v1"
 base_url = "https://api.deepseek.com"
-api_key = "sk-eed97e382d084eabbe0498dfa6f9624b"
+api_key = "[WSTAW TU KLUCZ]"
 model = "deepseek-flash"
 # limit czasu zapytania do LLM w sekundach
 timeout = 120
